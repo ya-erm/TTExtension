@@ -7,6 +7,7 @@ eraseButton.addEventListener("click", () => {
     document.getElementById("token-input").value = "";
     $("#portfolio-table tbody").children().remove();
     $(".nav-item[data-closable='true']").remove();
+    document.querySelector(".portfolio-total-cost").innerHTML = "";
     // Скрываем кнопку очистки хранилища
     setClassIf(eraseButton, "d-none", true);
 });
