@@ -13,8 +13,9 @@ window.TTApi = {
     LoadFillsByFigi,
     LoadInstrumentByFigi,
     LoadFillsByTicker,
+    LoadOrderbookByTicker,
     httpGet,
-    UpdateFills
+    UpdateFills,
 };
 
 var TTApi = window.TTApi;
@@ -73,6 +74,11 @@ async function LoadPortfolio() {
     await LoadCurrencies();
 
     CalculatePositions(TTApi.positions);
+
+    // TODO: загружать стаканы только для избранных позиций, т.к. много запросов
+    TTApi.positions
+        .filter(_ => _.count == 0)
+        .forEach(async position => await LoadOrderbook(position));
 
     return TTApi.positions;
 }
@@ -147,6 +153,37 @@ async function LoadInstrumentByTicker(ticker) {
     return (payload.instruments.length > 0) ? payload.instruments[0] : null;
 }
 
+/**
+ * Загрузить стакан
+ * @param {string} position - позиция
+ */
+async function LoadOrderbook(position) {
+    const orderbook = await httpGet(`/market/orderbook?figi=${position.figi}&depth=${1}`);
+    
+    position.lastPrice = orderbook.lastPrice;
+    position.lastPriceUpdated = new Date();
+    UpdatePosition(position);
+
+    return orderbook;
+}
+
+/**
+ * Загрузить стакан
+ * @param {string} ticker - идентификатор
+ */
+async function LoadOrderbookByTicker(ticker) {
+    let position = TTApi.positions.find(_ => _.ticker.toLowerCase() == ticker.toLowerCase());
+
+    if (!position) {
+        console.log(`Position ${ticker.toUpperCase()} not found at local positions. Requesting from API`)
+        position = await LoadInstrumentByTicker(ticker);
+        if (!position) {
+            throw new Error("Instrument not found");
+        }
+    }
+
+    return await LoadOrderbook(position);
+}
 
 // #region Positions
 
@@ -237,6 +274,7 @@ function UpdatePortfolio(portfolio) {
                 average: item.averagePositionPrice?.value,
                 expected: item.expectedYield?.value,
                 currency: item.averagePositionPrice?.currency || item.expectedYield?.currency,
+                lastPriceUpdate: new Date(),
                 needCalc: true,
                 lastPrice,
             };
@@ -286,7 +324,7 @@ function UpdatePosition(position, average, fixedPnL) {
     position.fixedPnL = fixedPnL || position.fixedPnL;
     position.expected = (position.lastPrice - position.average) * position.count;
     position.needCalc = false;
-    console.log(`Position ${position.ticker} updated (avg: ${average?.toFixed(2)}, fixedPnL: ${fixedPnL?.toFixed(2)})`);
+    console.log(`Position ${position.ticker} updated (average: ${average?.toFixed(2)}, fixedPnL: ${fixedPnL?.toFixed(2)})`);
     window.dispatchEvent(new CustomEvent("PositionUpdated", { detail: { position } }));
     localStorage.setItem('positions', JSON.stringify(TTApi.positions));
 }

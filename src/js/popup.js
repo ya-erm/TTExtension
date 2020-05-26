@@ -98,7 +98,9 @@ function FillPositionRow(positionRow, position) {
     cellLast.title = "Updated at " + new Date(position.lastPriceUpdated).toTimeString().substring(0, 8);
 
     const cellCost = positionRow.querySelector("td.portfolio-cost");
-    cellCost.textContent = printMoney(position.count * position.lastPrice, position.currency);
+    cellCost.textContent = (position.count != 0)
+        ? printMoney(position.count * position.lastPrice, position.currency) 
+        : "";
     setClassIf(cellCost, "inaccurate-value-text", position.needCalc);
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
@@ -446,6 +448,7 @@ addPositionForm.addEventListener("submit", (e) => {
 
     // Загружаем сделки по инструменту
     window.TTApi.LoadFillsByTicker(ticker)
+        .then(_ => window.TTApi.LoadOrderbookByTicker(ticker))
         .then(_ => {
             addPositionInput.value = "";
             $('#add-position-modal').modal('hide');
