@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tinkoff Trader Extension</title>
+    <!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"> -->
+    <link rel="stylesheet" href="css/font-awesome.min.css">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/overrides.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body class="p-2 table-dark" style="min-width:780px;">
+    <!--Tabs-->
+    <ul class="nav nav-tabs" id="main-nav" role="tablist">
+        <li class="nav-item" role="presentation">
+            <a class="nav-link" id="settings-tab" data-toggle="tab" href="#settings" role="tab" aria-controls="settings"
+                aria-selected="false">Settings</a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link active" id="portfolio-tab" data-toggle="tab" href="#portfolio" role="tab"
+                aria-controls="portfolio" data-default="true" aria-selected="true">Portfolio</a>
+        </li>
+        <template id="nav-tab-template">
+            <li class="nav-item d-flex position-relative" role="presentation" data-closable="true">
+                <a class="nav-link tab-text" id="example-tab" data-toggle="tab" href="#example" role="tab"
+                    aria-controls="example" aria-selected="false">Example</a>
+                <button class="btn btn-link position-absolute tab-close-button" title="Close tab"></button>
+            </li>
+        </template>
+        <span class="portfolio-total-cost text-nowrap"></span>
+    </ul>
+    <!--Tab Content-->
+    <div class="tab-content" id="main-tab-content">
+        <!--Token-->
+        <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+            <h4 class="text-center mt-2 mb-3">Welcome to Tinkoff Web Terminal Extension!</h4>
+            <form id="token-form" class="form-inline mb-3">
+                <div class="input-group m-auto">
+                    <label>
+                        <span class="mr-2">Token:</span>
+                        <input id="token-input" name="token" placeholder="Token"
+                            class="form-control form-control-sm mr-2"></input>
+                    </label>
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fa fa-floppy-o mr-2"></i>Save
+                    </button>
+                </div>
+            </form>
+            <div class="text-center mb-2">
+                <button id="erase-button" type="button" class="btn btn-sm btn-outline-danger"
+                    title="Token, positions and fills will be removed from browser storage">
+                    <i class="fa fa-trash-o mr-2"></i>Clear all saved data
+                </button>
+            </div>
+        </div>
+        <!--Portfolio-->
+        <div class="tab-pane fade show active" id="portfolio" role="tabpanel" aria-labelledby="portfolio-tab">
+            <table id="portfolio-table" class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
+                <thead>
+                    <tr>
+                        <th>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Asset</span>
+                                <div>
+                                    <button class="btn btn-xs btn-icon btn-dark" data-toggle="modal"
+                                        data-target="#add-position-modal">
+                                        <i class="fa fa-plus" title="Add"></i>
+                                    </button>
+                                    <button class="btn btn-xs btn-icon btn-dark d-none">
+                                        <i class="fa fa-filter" title="Filter"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </th>
+                        <th class="text-right">Count</th>
+                        <th class="text-right cursor-help" title="Average price">Average</th>
+                        <th class="text-right cursor-help" title="Last price">Price</th>
+                        <th class="text-right cursor-help" title="Cost = Count × Price">Cost</th>
+                        <th class="text-right cursor-help" title="Expected Profit or Loss">Expected</th>
+                        <th class="text-right cursor-help" title="Fixed Profit or Loss">Fixed P&L</th>
+                    </tr>
+                </thead>
+                <template id="portfolio-group-row-template">
+                    <tr class="group-row">
+                        <td colspan="10" class="font-italic"></td>
+                    </tr>
+                </template>
+                <template id="portfolio-row-template">
+                    <tr class="portfolio-table-row">
+                        <td class="portfolio-asset">
+                            <div class="d-flex align-items-center">
+                                <div class="portfolio-logo mr-2"></div>
+                                <span></span>
+                            </div>
+                        </td>
+                        <td class="portfolio-count text-right"></td>
+                        <td class="portfolio-average text-right"></td>
+                        <td class="portfolio-last text-right"></td>
+                        <td class="portfolio-cost text-right"></td>
+                        <td class="portfolio-expected text-right">
+                            <span></span>
+                        </td>
+                        <td class="portfolio-fixed-pnl text-right">
+                            <span></span>
+                        </td>
+                    </tr>
+                </template>
+                <tbody class="positions-stock"></tbody>
+                <tbody class="positions-bond"></tbody>
+                <tbody class="positions-etf"></tbody>
+                <tbody class="positions-currency"></tbody>
+                <tbody class="positions-summary-row"></tbody>
+            </table>
+        </div>
+        <!--Fills-->
+        <template id="tab-pane-fills-template">
+            <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
+                <table class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
+                    <thead>
+                        <tr>
+                            <th class="text-right" title="Index">№</th>
+                            <th>Date & Time ↑</th>
+                            <th title="Direction of fill">Dir</th>
+                            <th class="text-right">Price</th>
+                            <th class="text-right cursor-help" title="Quantity">Qnt</th>
+                            <th class="text-right">Payment</th>
+                            <th class="text-right cursor-help" title="Broker commission">Fee</th>
+                            <th class="text-right cursor-help" title="Current count">Cur</th>
+                            <th class="text-right" title="Average Price">Average</th>
+                            <th class="text-right cursor-help" title="Current x Avg.Price">Position</th>
+                            <th class="text-right cursor-help" title="Fixed Profit or Loss">Fixed P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </template>
+        <template id="fills-row-template">
+            <tr class="fills-table-row">
+                <td class="fills-index text-right"></td>
+                <td class="fills-time"></td>
+                <td class="fills-type"><span></span></td>
+                <td class="fills-price text-right"></td>
+                <td class="fills-count text-right"></td>
+                <td class="fills-payment text-right"></td>
+                <td class="fills-fee text-right"></td>
+                <td class="fills-current text-right"></td>
+                <td class="fills-average text-right"></td>
+                <td class="fills-position text-right"></td>
+                <td class="fills-fixed-pnl text-right"><span></span></td>
+            </tr>
+        </template>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="add-position-modal" tabindex="-1" role="dialog"
+        aria-labelledby="add-position-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="add-position-modal-label">Add position</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form id="add-position-form">
+                    <div class="modal-body">
+                        <input id="add-position-input" name="position-ticker" placeholder="Ticker"
+                            class="form-control form-control-sm" required></input>
+                    </div>
+                    <div class="modal-footer justify-content-between">
+                        <span class="status-message text-danger"></span>
+                        <div class="m-0">
+                            <button type="button" class="btn btn-secondary ml-2" data-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary ml-2">Ok</button>
+                        </div>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+
+    <!--Bootstrap-->
+    <script src="js/bootstrap/jquery-3.5.1.slim.min.js"></script>
+    <script src="js/bootstrap/popper.min.js"></script>
+    <script src="js/bootstrap/bootstrap.min.js"></script>
+    <!-- <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" crossorigin="anonymous"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script> -->
+    <!-- <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" crossorigin="anonymous"></script> -->
+
+    <!--Scripts-->
+    <script src="js/TTApi.js"></script>
+    <script src="js/popup.js"></script>
+
+</body>
+
+</html>

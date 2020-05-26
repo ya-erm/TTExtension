@@ -1,0 +1,75 @@
+/* Tabs */
+
+.tab-text {
+    padding-right: 1.75rem;
+}
+
+.tab-close-button {
+    padding-right: 1rem;
+    height: 100%;
+    right: 0;
+    
+    background-color: white;
+    -webkit-mask: url("x.svg") no-repeat center;
+    /* background-image: url("x.svg") no-repeat center; */
+}
+
+.tab-close-button:hover {
+    opacity: 0.75;
+}
+
+.tab-close-button:active {
+    opacity: 0.5;
+}
+
+.nav-item :not(.active) + .tab-close-button {
+    opacity: 0;
+}
+
+.nav-item :not(.active):hover + .tab-close-button,
+.nav-item :not(.active) + .tab-close-button:hover {
+    opacity: 1;
+}
+
+
+/* Portfolio */
+
+.portfolio-total-cost {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 1rem;
+}
+
+.portfolio-table-row {
+    cursor: pointer;
+}
+
+.portfolio-logo {
+    height: 20px;
+    width: 20px;
+    min-width: 20px;
+    padding: 2px;
+    border-radius: 50%;
+    background-size: 100%;
+    background-color: lightgrey;
+}
+
+@media (min-width: 768px) {
+    .portfolio-asset {
+        max-width: 14rem;
+    }
+    .portfolio-asset span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+.inaccurate-value-text {
+    opacity: 0.5;
+}
+
+.cursor-help {
+    cursor: help;
+}

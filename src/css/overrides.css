@@ -1,0 +1,92 @@
+.nav-link.disabled {
+    color: #adb5bd;
+}
+
+.nav-tabs {
+    border-bottom: 1px solid #444;
+}
+
+.nav-tabs .nav-link:hover,
+.nav-tabs .nav-link:focus {
+    border-color: #444 #444 transparent;
+}
+
+.nav-tabs .nav-link.disabled {
+    color: #adb5bd;
+    background-color: transparent;
+    border-color: transparent;
+}
+
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+    color: #fff;
+    background-color: #222;
+    border-color: #444 #444 transparent;
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .show>.nav-link {
+    color: #fff;
+    background-color: #375a7f;
+}
+
+.nav-tabs .nav-link,
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-link.active:focus,
+.nav-tabs .nav-link.active:hover,
+.nav-tabs .nav-item.open .nav-link,
+.nav-tabs .nav-item.open .nav-link:focus,
+.nav-tabs .nav-item.open .nav-link:hover,
+.nav-pills .nav-link,
+.nav-pills .nav-link.active,
+.nav-pills .nav-link.active:focus,
+.nav-pills .nav-link.active:hover,
+.nav-pills .nav-item.open .nav-link,
+.nav-pills .nav-item.open .nav-link:focus,
+.nav-pills .nav-item.open .nav-link:hover {
+    color: #fff;
+}
+
+.btn-xs,
+.btn-group-xs > .btn {
+  padding: 1px 0.844rem;
+  font-size: .7rem;
+  line-height: 1.5;
+  border-radius: .25rem; 
+}
+
+.btn-icon.btn-xs {
+    width: calc(1.15rem + 2px);
+    line-height: 1.15rem; 
+    padding: 0;
+}
+
+/* .table tbody+tbody {
+    border-top: 0;
+} */
+
+.modal-dialog {
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.modal-header, 
+.modal-footer {
+    border-color: #444;
+}
+
+.modal-content {
+    background-color: #303030;
+    box-shadow: 0 0 20px 0 rgba(0,0,0,0.25);
+}
+
+.close, 
+.close:hover {
+    color: #fff;
+}
+
+body.modal-open {
+    padding-right: 0.5rem !important;
+}
