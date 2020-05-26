@@ -14,11 +14,19 @@ window.TTApi = {
     LoadInstrumentByFigi,
     LoadFillsByTicker,
     LoadOrderbookByTicker,
-    httpGet,
     UpdateFills,
+    httpGet,
+    erase,
 };
 
 var TTApi = window.TTApi;
+
+function erase() {
+    TTApi.token = undefined;
+    TTApi.operations = {};
+    TTApi.positions = [];
+    TTApi.fills = {};
+}
 
 /**
  * Отправить HTTP GET запрос к API
