@@ -57,7 +57,7 @@
 
 @media (min-width: 768px) {
     .portfolio-asset {
-        max-width: 14rem;
+        max-width: 13rem;
     }
     .portfolio-asset span {
         overflow: hidden;
