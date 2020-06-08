@@ -101,7 +101,7 @@ function FillPositionRow(positionRow, position) {
 
     const cellCost = positionRow.querySelector("td.portfolio-cost");
     cellCost.textContent = (position.count != 0)
-        ? printMoney(position.count * position.lastPrice, position.currency) 
+        ? printMoney(position.count * position.lastPrice, position.currency)
         : "";
     setClassIf(cellCost, "inaccurate-value-text", position.needCalc);
 
@@ -189,9 +189,20 @@ function AddPositionSummaryRow(positions) {
     tbody.appendChild(positionRow);
 
     const totalCostSpan = document.querySelector(".portfolio-total-cost");
+    const oldTotalCost = parseFloat(totalCostSpan.innerHTML.replace(/ /g, ''));
     totalCostSpan.innerHTML = printMoney(totalCost, selectedCurrency);
     totalCostSpan.title = totalCostTitle;
     totalCostSpan.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+
+    if (oldTotalCost && Math.abs(totalCost - oldTotalCost) > 0.01) {
+        const totalCostChange = totalCost - oldTotalCost;
+        const totalCostChangeSpan = document.querySelector(".portfolio-total-cost-change");
+        totalCostChangeSpan.innerHTML = printMoney(totalCostChange, selectedCurrency, true);
+        setClassIf(totalCostChangeSpan, "text-danger", totalCostChange < 0);
+        setClassIf(totalCostChangeSpan, "animation-down", totalCostChange < 0);
+        setClassIf(totalCostChangeSpan, "text-success", totalCostChange > 0);
+        setClassIf(totalCostChangeSpan, "animation-up", totalCostChange > 0);
+    }
 }
 
 // Изменить выбранную для отображения итоговой суммы валюту

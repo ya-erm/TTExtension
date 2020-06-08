@@ -34,16 +34,11 @@
 
 /* Portfolio */
 
-.portfolio-total-cost {
-    cursor: pointer;
+.portfolio-total-cost-container {
     position: absolute;
     right: 0.75rem;
     top: 1rem;
-}
-
-.portfolio-table-row {
-    cursor: pointer;
-}
+} 
 
 .portfolio-logo {
     height: 20px;
@@ -66,8 +61,43 @@
     }
 }
 
+/* Animations */
+
+.animation-fade {
+    animation: fade 3s reverse forwards;
+}
+
+@keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.animation-up {
+    animation: up 2s forwards;
+}
+
+@keyframes up {
+    from { top: 0; }
+    to { top: -0.75rem; }
+}
+
+.animation-down {
+    animation: down 2s forwards;
+}
+
+@keyframes down {
+    from { top: 0; }
+    to { top: 0.75rem; }
+}
+
+/* Other */
+
 .inaccurate-value-text {
     opacity: 0.5;
+}
+
+.cursor-pointer {
+    cursor: pointer;
 }
 
 .cursor-help {

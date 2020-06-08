@@ -29,7 +29,10 @@
                 <button class="btn btn-link position-absolute tab-close-button" title="Close tab"></button>
             </li>
         </template>
-        <span class="portfolio-total-cost text-nowrap"></span>
+        <div class="portfolio-total-cost-container text-nowrap">
+            <span class="animation-fade"><span class="portfolio-total-cost-change position-relative"></span></span>
+            <span class="portfolio-total-cost cursor-pointer"></span>
+        </div>
     </ul>
     <!--Tab Content-->
     <div class="tab-content" id="main-tab-content">
@@ -88,7 +91,7 @@
                     </tr>
                 </template>
                 <template id="portfolio-row-template">
-                    <tr class="portfolio-table-row">
+                    <tr class="cursor-pointer">
                         <td class="portfolio-asset">
                             <div class="d-flex align-items-center">
                                 <a><div class="portfolio-logo mr-2"></div></a>
