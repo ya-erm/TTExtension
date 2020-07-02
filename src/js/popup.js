@@ -506,3 +506,15 @@ addPositionForm.addEventListener("submit", (e) => {
 });
 
 // #endregion
+
+
+// #region Settings
+
+const webTerminalCheckbox = document.querySelector("#webTerminalCheckbox");
+webTerminalCheckbox.checked = (localStorage["overrideAveragePriceOnWebTerminal"] === "true");
+webTerminalCheckbox.addEventListener("change", (e) => {
+    localStorage["overrideAveragePriceOnWebTerminal"] = e.target.checked;
+});
+
+
+// #endregion

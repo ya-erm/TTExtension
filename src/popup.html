@@ -39,23 +39,33 @@
         <!--Token-->
         <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
             <h4 class="text-center mt-2 mb-3">Welcome to Tinkoff Web Terminal Extension!</h4>
-            <form id="token-form" class="form-inline mb-3">
-                <div class="input-group m-auto">
-                    <label>
-                        <span class="mr-2">Token:</span>
-                        <input id="token-input" name="token" placeholder="Token"
-                            class="form-control form-control-sm mr-2"></input>
-                    </label>
-                    <button type="submit" class="btn btn-sm btn-primary">
-                        <i class="fa fa-floppy-o mr-2"></i>Save
+            <div class="offset-3 col-6">
+                <form id="token-form" class="form-inline mb-3">
+                    <div class="input-group flex-grow-1">
+                        <label class="flex-grow-1">
+                            <span class="mr-2">Token:</span>
+                            <input id="token-input" name="token" placeholder="Token"
+                                class="form-control form-control-sm flex-grow-1 mr-2"></input>
+                        </label>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="fa fa-floppy-o mr-2"></i>Save
+                        </button>
+                    </div>
+                </form>
+                <form id="settings-form" class="form-inline mb-3">
+                    <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="webTerminalCheckbox">
+                        <label class="custom-control-label cursor-pointer" for="webTerminalCheckbox">
+                            <span>Override average price on Web Terminal page</span>
+                        </label>
+                    </div>
+                </form>
+                <div class="text-center mb-2">
+                    <button id="erase-button" type="button" class="btn btn-sm btn-outline-danger"
+                        title="Token, positions and fills will be removed from browser storage">
+                        <i class="fa fa-trash-o mr-2"></i>Clear all saved data
                     </button>
                 </div>
-            </form>
-            <div class="text-center mb-2">
-                <button id="erase-button" type="button" class="btn btn-sm btn-outline-danger"
-                    title="Token, positions and fills will be removed from browser storage">
-                    <i class="fa fa-trash-o mr-2"></i>Clear all saved data
-                </button>
             </div>
         </div>
         <!--Portfolio-->
