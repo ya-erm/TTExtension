@@ -14,6 +14,7 @@ window.TTApi = {
     LoadInstrumentByFigi,
     LoadFillsByTicker,
     LoadOrderbookByTicker,
+    RemovePosition,
     UpdateFills,
     httpGet,
     erase,
@@ -342,6 +343,26 @@ async function CalculatePositions(positions) {
     const needCalcPositions = positions.filter(_ => _.needCalc);
     console.log(`Calculating ${needCalcPositions.length} positions`);
     needCalcPositions.forEach(async position => await LoadFillsByFigi(position.figi));
+}
+
+/**
+ * Удалить позицию из списка позиций
+ * @param {object} position - позиция
+ */
+function RemovePosition(position) {
+    if (position.count != 0) {
+        console.log(`Failed to remove non-zero position ${position.ticker}`);
+        return;
+    }
+    const positions = window.TTApi.positions;
+    const index = positions.indexOf(position);
+    if (index >= 0) {
+        positions.splice(index, 1)
+        localStorage.setItem('positions', JSON.stringify(positions));
+        window.dispatchEvent(new CustomEvent("PositionRemoved", { detail: { position } }));
+    } else {
+        console.log(`Failed to remove position ${position.ticker}, it's not found`);
+    }
 }
 
 // #endregion

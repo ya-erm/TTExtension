@@ -45,6 +45,13 @@ window.addEventListener("PositionUpdated", function (event) {
     AddPositionSummaryRow(window.TTApi.positions);
 });
 
+// Обработчик события удаления позиции
+window.addEventListener("PositionRemoved", function (event) {
+    const { position } = event.detail;
+    document.querySelector(`#position-${position.figi}`)?.remove();
+    AddPositionSummaryRow(window.TTApi.positions);
+});
+
 function AddOrUpdatePosition(position) {
     var positionRow = document.getElementById(`position-${position.figi}`);
     if (!positionRow) {
@@ -89,6 +96,20 @@ function AddPositionRow(position) {
   * @param {object} position - позиция
   */
 function FillPositionRow(positionRow, position) {
+    if (position.count == 0) {
+        if (!positionRow.querySelector(".portfolio-asset-button-remove")) {
+            const buttonRemove = document.querySelector("#portfolio-asset-button-remove-template").content.firstElementChild.cloneNode(true);
+            buttonRemove.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                OnPositionRemoveClick(position);
+            });
+            positionRow.querySelector(".portfolio-asset div").appendChild(buttonRemove);
+        }
+    } else {
+        positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
+    }
+
     const cellCount = positionRow.querySelector("td.portfolio-count");
     cellCount.textContent = position.count;
 
@@ -245,6 +266,11 @@ function OnPositionClick(position) {
 
 }
 
+// Обработчик нажатия на кнопку удаления позиции
+function OnPositionRemoveClick(position) {
+    window.TTApi.RemovePosition(position);
+}
+
 // #endregion 
 
 // #region Operations 
@@ -351,7 +377,12 @@ function mapInstrumentType(type) {
     }
 }
 
-// Включить/выключить CSS класс для элемента по условию
+/**
+  * Включить/выключить CSS класс для элемента по условию
+  * @param {object} element - HTML элемент
+  * @param {string} className - Название класса
+  * @param {boolean} condition - Условие, при выполнении которого класс будет применён
+  */
 function setClassIf(element, className, condition) {
     if (!condition && element.classList.contains(className)) {
         element.classList.remove(className);

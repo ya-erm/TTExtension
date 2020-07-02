@@ -65,6 +65,20 @@
     }
 }
 
+.portfolio-asset-button-remove {
+    min-width: calc(1.15rem + 2px);
+    visibility: collapse;
+    color: white;
+}
+
+.portfolio-asset-button-remove:hover {
+    color: gray;
+}
+
+.portfolio-asset:hover .portfolio-asset-button-remove {
+    visibility: visible;
+}
+
 /* Animations */
 
 .animation-fade {

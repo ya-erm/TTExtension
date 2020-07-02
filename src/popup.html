@@ -90,12 +90,17 @@
                         <td colspan="10" class="font-italic"></td>
                     </tr>
                 </template>
+                <template id="portfolio-asset-button-remove-template">
+                    <button class="portfolio-asset-button-remove btn btn-xs btn-icon btn-link">
+                        <i class="fa fa-trash-o" title="Remove position"></i>
+                    </button>
+                </template>
                 <template id="portfolio-row-template">
-                    <tr class="cursor-pointer">
+                    <tr class="portfolio-row cursor-pointer">
                         <td class="portfolio-asset">
                             <div class="d-flex align-items-center">
                                 <a><div class="portfolio-logo mr-2"></div></a>
-                                <span></span>
+                                <span class="flex-grow-1"></span>
                             </div>
                         </td>
                         <td class="portfolio-count text-right"></td>
