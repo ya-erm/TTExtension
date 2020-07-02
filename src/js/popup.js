@@ -64,6 +64,7 @@ function AddPositionRow(position) {
 
     const cellAsset = positionRow.querySelector("td.portfolio-asset");
     cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + position.instrumentType.toLowerCase() + "s/" + position.ticker;
+    cellAsset.querySelector("a").title = cellAsset.querySelector("a").href;
     cellAsset.querySelector("span").textContent = position.instrumentType === "Stock"
         ? position.ticker + ' - ' + position.name
         : position.name;

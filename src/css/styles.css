@@ -50,6 +50,10 @@
     background-color: lightgrey;
 }
 
+.portfolio-logo:hover {
+    box-shadow: grey 0px 0px 5px;
+}
+
 @media (min-width: 768px) {
     .portfolio-asset {
         max-width: 13rem;
