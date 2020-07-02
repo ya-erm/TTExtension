@@ -15,11 +15,12 @@ var HandlePositionsUpdate = (positions) => {
     });
 }
 
-// Каждые 5 секунд запрашиваем список позиций из расширения
-setInterval(() => {
-    chrome.runtime.sendMessage({ type: "GetPositions" }, HandlePositionsUpdate);
-}, 5000);
-
+if (document.URL.startsWith("https://www.tinkoff.ru/invest-terminal")) {
+    // Каждые 5 секунд запрашиваем список позиций из расширения
+    setInterval(() => {
+        chrome.runtime.sendMessage({ type: "GetPositions" }, HandlePositionsUpdate);
+    }, 5000);
+}
 
 
 /* TTWebApi */
@@ -85,8 +86,8 @@ function CalculateProfit(asset, currency) {
     const countCell = FindCell(portfolioTable, row, "Всего");
     if (avgCell == null || priceCell == null || countCell == null) { return; }
 
-    const avgPrice = Number(avgCell.textContent.split(' ')[0].replace(',', '.'));
-    const curPrice = Number(priceCell.textContent.split(' ')[0].replace(',', '.'));
+    const avgPrice = Number.parseFloat(avgCell.textContent.replace(' ', ''));
+    const curPrice = Number.parseFloat(priceCell.textContent.replace(' ', ''));
     const count = Number(countCell.textContent);
 
     const profit = (curPrice - avgPrice) * count;
