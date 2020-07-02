@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Tinkoff Trader Extension",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "icons": {
     "16": "src/icon/l-16.png",
     "20": "src/icon/d-20.png",
