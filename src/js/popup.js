@@ -13,9 +13,9 @@ eraseButton.addEventListener("click", () => {
     setClassIf(eraseButton, "d-none", true);
 });
 
-
 // Загружаем токен из localStorage
 const token = localStorage["token"];
+const UPDATE_PROFILE_INTERVAL = 5 *  1000;
 
 if (token) {
     window.TTApi.token = token;
@@ -26,9 +26,8 @@ if (token) {
     AddPositionSummaryRow(window.TTApi.positions);
 
     // Загружаем новые позиции и обновляем таблицу
-    window.TTApi.LoadPortfolio()
-        .then(positions => positions.forEach(position => AddOrUpdatePosition(position)))
-        .then(_ => AddPositionSummaryRow(window.TTApi.positions));
+    loopLoadPortfolio();
+
 } else {
     // Открываем вкладку настроек
     $("#settings-tab").tab("show");
@@ -36,7 +35,7 @@ if (token) {
     setClassIf(eraseButton, "d-none", true);
 }
 
-// #region Positions 
+// #region Positions
 
 // Обработчик события обновления позиции
 window.addEventListener("PositionUpdated", function (event) {
@@ -51,6 +50,17 @@ window.addEventListener("PositionRemoved", function (event) {
     document.querySelector(`#position-${position.figi}`)?.remove();
     AddPositionSummaryRow(window.TTApi.positions);
 });
+
+function loopLoadPortfolio() {
+    setInterval(
+        () => (
+            window.TTApi
+                .LoadPortfolio()
+                .then(positions => positions.forEach(position => AddOrUpdatePosition(position)))
+        ),
+        UPDATE_PROFILE_INTERVAL
+    );
+}
 
 function AddOrUpdatePosition(position) {
     var positionRow = document.getElementById(`position-${position.figi}`);
@@ -143,7 +153,7 @@ function FillPositionRow(positionRow, position) {
   * @param {string} to - в какую валюту
   */
 function GetCurrencyRate(from, to) {
-    const usdToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HGFT4")?.lastPrice; // Доллар США 
+    const usdToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HGFT4")?.lastPrice; // Доллар США
     if (from == "USD" && to == "RUB") {
         return usdToRub;
     } else if (from == "RUB" && to == "USD") {
@@ -271,9 +281,9 @@ function OnPositionRemoveClick(position) {
     window.TTApi.RemovePosition(position);
 }
 
-// #endregion 
+// #endregion
 
-// #region Operations 
+// #region Operations
 
 function DrawOperations(position, fills) {
     const tbody = document.querySelector(`#${position.ticker} table tbody`)
@@ -442,7 +452,7 @@ function CloseTab(href) {
 
 // #endregion
 
-// #region Token 
+// #region Token
 
 const tokenForm = document.getElementById("token-form");
 
@@ -462,15 +472,14 @@ tokenForm.addEventListener("submit", (e) => {
     $(`#${defaultTabId}`).tab('show')
 
     // Загружаем новые позиции и обновляем таблицу
-    window.TTApi.LoadPortfolio()
-        .then((positions) => positions.forEach(position => AddOrUpdatePosition(position)));
+    loopLoadPortfolio();
 
     return false;
 });
 
 // #endregion
 
-// #region Add position form 
+// #region Add position form
 
 $('#add-position-modal').on('shown.bs.modal', function () {
     $('#add-position-input').focus();
@@ -484,7 +493,7 @@ addPositionInput.oninput = function () {
     addPositionError.textContent = "";
 };
 
-// Обработчик сабмита формы 
+// Обработчик сабмита формы
 addPositionForm.addEventListener("submit", (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
