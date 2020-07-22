@@ -51,15 +51,16 @@ window.addEventListener("PositionRemoved", function (event) {
     AddPositionSummaryRow(window.TTApi.positions);
 });
 
+// Загрузка портфеля
+function loadPortfolio() {
+    window.TTApi.LoadPortfolio()
+        .then(positions => positions.forEach(position => AddOrUpdatePosition(position)));
+}
+
+// Циклическая загрузка портфеля
 function loopLoadPortfolio() {
-    setInterval(
-        () => (
-            window.TTApi
-                .LoadPortfolio()
-                .then(positions => positions.forEach(position => AddOrUpdatePosition(position)))
-        ),
-        UPDATE_PROFILE_INTERVAL
-    );
+    loadPortfolio();
+    setInterval(loadPortfolio, UPDATE_PROFILE_INTERVAL);
 }
 
 function AddOrUpdatePosition(position) {
