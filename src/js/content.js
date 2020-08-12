@@ -64,7 +64,7 @@ function SetAvgPrice(asset, price, currency) {
     if (row == undefined) { return; }
 
     const avgCell = FindCell(portfolioTable, row, "Средняя");
-    if (avgCell == null) { return; }
+    if (avgCell == null || price == undefined) { return; }
 
     avgCell.textContent = printMoney(price, currency);
 }
@@ -86,24 +86,26 @@ function CalculateProfit(asset, currency) {
     const countCell = FindCell(portfolioTable, row, "Всего");
     if (avgCell == null || priceCell == null || countCell == null) { return; }
 
-    const avgPrice = Number.parseFloat(avgCell.textContent.replace(' ', ''));
-    const curPrice = Number.parseFloat(priceCell.textContent.replace(' ', ''));
+    const avgPrice = Number.parseFloat(avgCell.textContent.replace(',', '.').replace(' ', ''));
+    const curPrice = Number.parseFloat(priceCell.textContent.replace(',', '.').replace(' ', ''));
     const count = Number(countCell.textContent);
 
     const profit = (curPrice - avgPrice) * count;
 
-    const profitCell = FindCell(portfolioTable, row, "Доход");
-    if (profitCell == null) { return; }
+    const profitCell = FindCell(portfolioTable, row, "Доход").querySelector("div");
+    if (profitCell != null) { 
+        profitCell.textContent = printMoney(profit, currency);
+        setClassIf(profitCell, "profit", profit > 0);
+        setClassIf(profitCell, "loss", profit < 0);
+    }
 
-    profitCell.textContent = printMoney(profit, currency);
-    profitCell.className = profit > 0 ? "profit" : "loss";
-
-    const profitPercentsCell = FindCell(portfolioTable, row, "Доход, %");
-    if (profitPercentsCell == null) { return; }
-
-    const profitPercents = 100 * profit / (avgPrice * count);
-    profitPercentsCell.textContent = printMoney(profitPercents, '%');
-    profitPercentsCell.className = profitPercents > 0 ? "profit" : "loss";
+    const profitPercentsCell = FindCell(portfolioTable, row, "Доход, %").querySelector("div");
+    if (profitPercentsCell != null) {
+        const profitPercents = 100 * profit / (avgPrice * Math.abs(count));
+        profitPercentsCell.textContent = printMoney(profitPercents, '%');
+        setClassIf(profitPercentsCell, "profit", profitPercents > 0);
+        setClassIf(profitPercentsCell, "loss", profitPercents < 0);
+    }
 }
 
 // Конвертация строкового представления валюты в символ
@@ -123,3 +125,22 @@ function printMoney(value, currency, withSign = false) {
     const sign = (withSign && value > 0 ? '+' : '')
     return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${mapCurrency(currency)}`;
 }
+
+// #region Utilities
+
+/**
+  * Включить/выключить CSS класс для элемента по условию
+  * @param {object} element - HTML элемент
+  * @param {string} className - Название класса
+  * @param {boolean} condition - Условие, при выполнении которого класс будет применён
+  */
+ function setClassIf(element, className, condition) {
+    if (!condition && element.classList.contains(className)) {
+        element.classList.remove(className);
+    }
+    else if (condition && !element.classList.contains(className)) {
+        element.classList.add(className);
+    }
+}
+
+//#endregion
