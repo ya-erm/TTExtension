@@ -274,10 +274,12 @@ function OnPositionClick(position) {
         if (ticker == "RUB") {
             tabPane.querySelector(".loading-content-text").textContent = "Loading...";
             window.TTApi.LoadFillsByFigi()
-                .then((operations) => { 
+                .then((operations) => {
                     tabPane.querySelector(".loading-content-text").textContent = "";
-                    DrawSystemOperations(ticker, operations); 
+                    DrawSystemOperations(ticker, operations);
                 });
+            const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
+            setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
         } else {
             // Отображаем сделки из памяти
             if (window.TTApi.fills[position.ticker]) {
@@ -366,7 +368,8 @@ function DrawOperations(position, fills) {
 
 async function DrawSystemOperations(ticker, operations) {
     const filteredOperations = operations
-        .filter(item => item.operationType != "Buy" && item.operationType != "Sell" && item.operationType != "BrokerCommission" && item.operationType != "BuyCard");
+        .filter(item => !["Buy", "BuyCard", "Sell", "BrokerCommission"].includes(item.operationType))
+        .filter(item => operationsFilter.includes(item.operationType));
 
     const distinct = (value, index, self) => self.indexOf(value) === index;
     const positions = await Promise.all(filteredOperations
@@ -660,6 +663,89 @@ addPositionForm.addEventListener("submit", (e) => {
 
 // #endregion
 
+// #region Filter operations form
+
+const filterOperationsForm = document.getElementById("filter-operations-form");
+const filterOperationsContainer= filterOperationsForm.querySelector(".modal-body .checkboxes-container");
+const filterOperationsError = filterOperationsForm.querySelector(".status-message");
+
+filterOperationsForm.querySelector("#filter-operations-select-all").addEventListener("click", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+    filterOperationsForm.querySelectorAll("[name=operationType]")
+        .forEach(checkbox => checkbox.checked = true);
+});
+
+filterOperationsForm.querySelector("#filter-operations-select-none").addEventListener("click", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+    filterOperationsForm.querySelectorAll("[name=operationType]")
+        .forEach(checkbox => checkbox.checked = false);
+});
+
+
+const operationTypes = [
+    "MarginCommission",
+    "ServiceCommission",
+    "TaxDividend",
+    "Tax",
+    "Dividend",
+    "Coupon",
+    "PayIn",
+    "PayOut",
+];
+const defaultOperationsFilter = operationTypes;
+let operationsFilter = JSON.parse(localStorage.getItem('operationsFilter')) || defaultOperationsFilter;
+
+$('#filter-operations-modal').on('shown.bs.modal', function () {
+    AddFilterOperationsCheckboxes();
+});
+
+function AddFilterOperationsCheckboxes() {
+    filterOperationsContainer.textContent = "";
+    operationTypes.forEach(item => {
+        const checkbox = document.querySelector('#filter-operations-checkbox-template').content.firstElementChild.cloneNode(true);
+
+        const checkboxInput = checkbox.querySelector('input');
+        checkboxInput.id = item;
+        checkboxInput.name = "operationType";
+        checkboxInput.checked = operationsFilter.includes(item);
+
+        const checkboxLabel = checkbox.querySelector('label');
+        checkboxLabel.textContent = item;
+        checkboxLabel.setAttribute("for", item);
+
+        filterOperationsContainer.appendChild(checkbox);
+    });
+}
+
+filterOperationsForm.addEventListener("submit", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+    let filter = [];
+    const checkboxes = filterOperationsForm.querySelectorAll("[name=operationType]");
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            filter.push(checkbox.id);
+        }
+    });
+
+    if (filter.length == 0) {
+        filterOperationsError.textContent = "Select at least one option";
+        return;
+    } else {
+        filterOperationsError.textContent = "";
+        operationsFilter = filter;
+    }
+
+    localStorage.setItem('operationsFilter', JSON.stringify(operationsFilter));
+
+    const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
+    setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
+
+    DrawSystemOperations("RUB", TTApi.operations[undefined]);
+
+    $('#filter-operations-modal').modal('hide');
+});
+
+// #endregion
 
 // #region Settings
 
@@ -678,6 +764,5 @@ updateIntervalInput.addEventListener("change", (e) => {
     console.log(`Positions update interval changed. New value: ${updateIntervalTimeout} ms`)
     loopLoadPortfolio();
 });
-
 
 // #endregion
