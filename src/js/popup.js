@@ -15,7 +15,8 @@ eraseButton.addEventListener("click", () => {
 
 // Загружаем токен из localStorage
 const token = localStorage["token"];
-const UPDATE_PROFILE_INTERVAL = 5 *  1000;
+let updateIntervalTimeout = localStorage["positionsUpdateIntervalInput"] || 60 * 1000;
+let positionsUpdateTimerId;
 
 if (token) {
     window.TTApi.token = token;
@@ -60,7 +61,10 @@ function loadPortfolio() {
 // Циклическая загрузка портфеля
 function loopLoadPortfolio() {
     loadPortfolio();
-    setInterval(loadPortfolio, UPDATE_PROFILE_INTERVAL);
+    if (positionsUpdateTimerId != undefined) {
+        clearTimeout(positionsUpdateTimerId)
+    }
+    positionsUpdateTimerId = setInterval(loadPortfolio, updateIntervalTimeout);
 }
 
 function AddOrUpdatePosition(position) {
@@ -524,6 +528,16 @@ const webTerminalCheckbox = document.querySelector("#webTerminalCheckbox");
 webTerminalCheckbox.checked = (localStorage["overrideAveragePriceOnWebTerminal"] === "true");
 webTerminalCheckbox.addEventListener("change", (e) => {
     localStorage["overrideAveragePriceOnWebTerminal"] = e.target.checked;
+});
+
+
+const updateIntervalInput = document.querySelector("#updateIntervalInput");
+updateIntervalInput.value = updateIntervalTimeout / 1000;
+updateIntervalInput.addEventListener("change", (e) => {
+    updateIntervalTimeout = e.target.value * 1000;
+    localStorage["positionsUpdateIntervalInput"] = updateIntervalTimeout;
+    console.log(`Positions update interval changed. New value: ${updateIntervalTimeout} ms`)
+    loopLoadPortfolio();
 });
 
 
