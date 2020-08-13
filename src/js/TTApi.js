@@ -3,12 +3,14 @@ const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
 // https://tinkoffcreditsystems.github.io/invest-openapi/swagger-ui/
 
 if (!window.TTApi) { window.TTApi = {}; }
+if (!window.TTApi.instruments) { window.TTApi.instruments = JSON.parse(localStorage.getItem('instruments')) || []; }
 if (!window.TTApi.operations) { window.TTApi.operations = JSON.parse(localStorage.getItem('operations')) || {}; }
 if (!window.TTApi.positions) { window.TTApi.positions = JSON.parse(localStorage.getItem('positions')) || []; }
 if (!window.TTApi.fills) { window.TTApi.fills = JSON.parse(localStorage.getItem('fills')) || {}; }
 
 window.TTApi = {
     ...window.TTApi,
+    FindPosition,
     LoadPortfolio,
     LoadFillsByFigi,
     LoadInstrumentByFigi,
@@ -117,26 +119,16 @@ async function LoadFillsByTicker(ticker) {
 async function LoadFillsByFigi(figi) {
     const fromDate = encodeURIComponent('2000-01-01T00:00:00Z');
     const toDate = encodeURIComponent(new Date().toISOString());
-    const path = `/operations?from=${fromDate}&to=${toDate}&figi=${figi}`;
+    const path = `/operations?from=${fromDate}&to=${toDate}` + (figi != undefined ? `&figi=${figi}` : "");
 
     const payload = await httpGet(path);
     TTApi.operations[figi] = payload.operations;
 
-    let position = TTApi.positions.find(_ => _.figi == figi);
-    if (!position) {
-        const item = await LoadInstrumentByFigi(figi);
-        position = {
-            ticker: item.ticker,
-            name: item.name,
-            figi: item.figi,
-            isin: item.isin,
-            count: 0,
-            instrumentType: item.type,
-            currency: item.currency,
-        };
-        TTApi.positions.push(position);
-        sortPositions(TTApi.positions);
+    if (figi == undefined) {
+        return TTApi.operations[figi];
     }
+
+    const position = await FindPosition(figi);
 
     if (payload.operations.length > 0) {
         UpdateFills(position, payload.operations);
@@ -168,7 +160,7 @@ async function LoadInstrumentByTicker(ticker) {
  */
 async function LoadOrderbook(position) {
     const orderbook = await httpGet(`/market/orderbook?figi=${position.figi}&depth=${1}`);
-    
+
     position.lastPrice = orderbook.lastPrice;
     position.lastPriceUpdated = new Date();
     UpdatePosition(position);
@@ -195,6 +187,44 @@ async function LoadOrderbookByTicker(ticker) {
 }
 
 // #region Positions
+
+/**
+ * Найти инструмент
+ * @param {string} figi - идентификатор
+ */
+async function FindInstrumentByFigi(figi) {
+    let instrument = TTApi.instruments.find(_ => _.figi == figi);
+    if (!instrument) {
+        instrument = await LoadInstrumentByFigi(figi);
+        TTApi.instruments.push(instrument);
+        localStorage.setItem('instruments', JSON.stringify(TTApi.instruments));
+    }
+    return instrument;
+}
+
+/**
+ * Найти позицию
+ * @param {string} figi - идентификатор
+ */
+async function FindPosition(figi) {
+    let position = TTApi.positions.find(_ => _.figi == figi);
+
+    if (!position) {
+        const item = await FindInstrumentByFigi(figi);
+        position = {
+            ticker: item.ticker,
+            name: item.name,
+            figi: item.figi,
+            isin: item.isin,
+            count: 0,
+            instrumentType: item.type,
+            currency: item.currency,
+        };
+        TTApi.positions.push(position);
+        sortPositions(TTApi.positions);
+    }
+    return position;
+}
 
 function UpdateCurrencies(currencies) {
     currencies.forEach(item => {
