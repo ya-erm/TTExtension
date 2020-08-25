@@ -183,6 +183,8 @@ function AddPositionSummaryRow(positions) {
     positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
     positionRow.id = "position-summary";
 
+    setClassIf(positionRow, "cursor-pointer", false);
+
     const total = positions.reduce((result, position) => {
         result.cost[position.currency] = (position.count || 0) * (position.average || 0) + (position.expected || 0) + (result.cost[position.currency] || 0);
         result.expected[position.currency] = (position.expected || 0) + (result.expected[position.currency] || 0);
@@ -222,7 +224,9 @@ function AddPositionSummaryRow(positions) {
     cellFixedPnL.title = totalFixedPnLTitle;
     cellFixedPnL.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
 
-    positionRow.querySelector("td.portfolio-asset").innerHTML = "";
+    const assetCell = positionRow.querySelector("td.portfolio-asset");
+    assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
+    assetCell.addEventListener("click", OnOperationsLinkClick);
 
     const tbody = document.querySelector("#portfolio-table tbody.positions-summary-row");
     tbody.appendChild(positionRow);
@@ -263,33 +267,47 @@ function OnPositionClick(position) {
     if (!mainNav.querySelector(`#${ticker}-tab`)) {
         // Создаём и добавляем вкладку
         const mainTabContent = document.querySelector("#main-tab-content");
-        const tabPaneTemplate = (ticker == "RUB") ? "tab-pane-money-template" : "tab-pane-fills-template";
-        const title = (ticker == "RUB") ? "Operations" : ticker;
-        const { tab, tabPane } = CreateTab("nav-tab-template", tabPaneTemplate, title, ticker);
+        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-fills-template", ticker, ticker);
         mainNav.appendChild(tab);
         mainTabContent.appendChild(tabPane);
 
         tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(ticker));
 
-        if (ticker == "RUB") {
-            tabPane.querySelector(".loading-content-text").textContent = "Loading...";
-            window.TTApi.LoadFillsByFigi()
-                .then((operations) => {
-                    tabPane.querySelector(".loading-content-text").textContent = "";
-                    DrawSystemOperations(ticker, operations);
-                });
-            const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
-            setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
-        } else {
-            // Отображаем сделки из памяти
-            if (window.TTApi.fills[position.ticker]) {
-                DrawOperations(position, window.TTApi.fills[position.ticker]);
-            }
-
-            // Загружаем новые сделки и обновляем таблицу
-            window.TTApi.LoadFillsByFigi(position.figi)
-                .then((fills) => DrawOperations(position, fills));
+        // Отображаем сделки из памяти
+        if (window.TTApi.fills[position.ticker]) {
+            DrawOperations(position, window.TTApi.fills[position.ticker]);
         }
+
+        // Загружаем новые сделки и обновляем таблицу
+        window.TTApi.LoadFillsByFigi(position.figi)
+            .then((fills) => DrawOperations(position, fills));
+    }
+    // Открываем вкладку
+    $(`#${ticker}-tab`).tab('show');
+}
+
+// Обработчик нажатия на ссылку операций
+function OnOperationsLinkClick() {
+    const ticker = "Operations";
+    const mainNav = document.querySelector("#main-nav");
+    // Если вкладка не существует
+    if (!mainNav.querySelector(`#${ticker}-tab`)) {
+        // Создаём и добавляем вкладку
+        const mainTabContent = document.querySelector("#main-tab-content");
+        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-money-template", ticker, ticker);
+        mainNav.appendChild(tab);
+        mainTabContent.appendChild(tabPane);
+
+        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(ticker));
+
+        tabPane.querySelector(".loading-content-text").textContent = "Loading...";
+        window.TTApi.LoadFillsByFigi()
+            .then((operations) => {
+                tabPane.querySelector(".loading-content-text").textContent = "";
+                DrawSystemOperations(operations);
+            });
+        const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
+        setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
     }
     // Открываем вкладку
     $(`#${ticker}-tab`).tab('show');
@@ -366,7 +384,8 @@ function DrawOperations(position, fills) {
     tbody.prepend(fillRow);
 }
 
-async function DrawSystemOperations(ticker, operations) {
+async function DrawSystemOperations(operations) {
+    const ticker = "Operations";
     const filteredOperations = operations
         .filter(item => !["Buy", "BuyCard", "Sell", "BrokerCommission"].includes(item.operationType))
         .filter(item => operationsFilter.includes(item.operationType));
@@ -666,7 +685,7 @@ addPositionForm.addEventListener("submit", (e) => {
 // #region Filter operations form
 
 const filterOperationsForm = document.getElementById("filter-operations-form");
-const filterOperationsContainer= filterOperationsForm.querySelector(".modal-body .checkboxes-container");
+const filterOperationsContainer = filterOperationsForm.querySelector(".modal-body .checkboxes-container");
 const filterOperationsError = filterOperationsForm.querySelector(".status-message");
 
 filterOperationsForm.querySelector("#filter-operations-select-all").addEventListener("click", (e) => {
@@ -740,7 +759,7 @@ filterOperationsForm.addEventListener("submit", (e) => {
     const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
     setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
 
-    DrawSystemOperations("RUB", TTApi.operations[undefined]);
+    DrawSystemOperations(TTApi.operations[undefined]);
 
     $('#filter-operations-modal').modal('hide');
 });

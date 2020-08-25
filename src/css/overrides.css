@@ -61,6 +61,10 @@
     padding: 0;
 }
 
+.btn-link:hover {
+  color: var(--blue);
+}
+
 /* .table tbody+tbody {
     border-top: 0;
 } */
