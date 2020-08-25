@@ -177,9 +177,51 @@
                 <td class="fills-fixed-pnl text-right"><span></span></td>
             </tr>
         </template>
+        
+        <!--Money transactions-->
+        <template id="tab-pane-money-template">
+            <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
+                <table class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
+                    <thead class="thead-sticky">
+                        <tr>
+                            <th class="text-right" title="Index">№</th>
+                            <th>Date & Time ↑</th>
+                            <th class="text-right">Payment</th>
+                            <th>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Type</span>
+                                    <button class="btn btn-xs btn-icon btn-dark" 
+                                        data-toggle="modal" data-target="#filter-operations-modal">
+                                        <i class="fa fa-filter" title="Filter by type"></i>
+                                    </button>
+                                </div>
+                            </th>
+                            <th>Asset</th>
+                        </tr>
+                    </thead>
+                    <tbody class="money-summary"></tbody>
+                    <tbody class="money-detailed"></tbody>
+                </table>
+                <span class="loading-content-text d-block w-100 text-center"></span>
+            </div>
+        </template>
+        <template id="money-row-template">
+            <tr class="money-table-row">
+                <td class="money-index text-right"></td>
+                <td class="money-time"></td>
+                <td class="money-payment text-right"></td>
+                <td class="money-type"><span></span></td>
+                <td class="portfolio-asset">
+                    <div class="d-flex align-items-center">
+                        <a><div class="portfolio-logo mr-2"></div></a>
+                        <span class="flex-grow-1"></span>
+                    </div>
+                </td>
+            </tr>
+        </template>
     </div>
 
-    <!-- Modal -->
+    <!-- Modal add position-->
     <div class="modal fade" id="add-position-modal" tabindex="-1" role="dialog"
         aria-labelledby="add-position-modal-label" aria-hidden="true">
         <div class="modal-dialog">
@@ -204,7 +246,40 @@
                         </div>
                     </div>
                 </form>
-
+            </div>
+        </div>
+    </div>
+    <!-- Modal filter operations-->
+    <div class="modal fade" id="filter-operations-modal" tabindex="-1" role="dialog"
+        aria-labelledby="filter-operations-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="filter-operations-modal-label">Filter operations by type</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form id="filter-operations-form">
+                    <div class="modal-body">
+                        <button id="filter-operations-select-all" class="btn btn-xs btn-dark">Select all</button>
+                        <button id="filter-operations-select-none" class="btn btn-xs icon btn-dark">Select none</button>
+                        <div class="checkboxes-container mt-2"></div>
+                    </div>
+                    <template id="filter-operations-checkbox-template">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="checkbox_id">
+                            <label class="custom-control-label cursor-pointer" for="checkbox_id">Label</label>
+                          </div>
+                    </template>
+                    <div class="modal-footer justify-content-between">
+                        <span class="status-message text-danger"></span>
+                        <div class="m-0">
+                            <button type="button" class="btn btn-secondary ml-2" data-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-primary ml-2">Ok</button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
