@@ -130,3 +130,11 @@
     color: var(--white);
     background-color: var(--dark);
 }
+
+.link {
+    cursor: pointer;
+}
+
+.link:hover {
+    text-decoration: underline;
+}

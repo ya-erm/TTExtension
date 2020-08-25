@@ -158,6 +158,8 @@ function FillPositionRow(positionRow, position) {
   * @param {string} to - в какую валюту
   */
 function GetCurrencyRate(from, to) {
+    if (from == to) { return 1.0 }
+
     const usdToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HGFT4")?.lastPrice; // Доллар США
     if (from == "USD" && to == "RUB") {
         return usdToRub;
@@ -180,6 +182,8 @@ function AddPositionSummaryRow(positions) {
 
     positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
     positionRow.id = "position-summary";
+
+    setClassIf(positionRow, "cursor-pointer", false);
 
     const total = positions.reduce((result, position) => {
         result.cost[position.currency] = (position.count || 0) * (position.average || 0) + (position.expected || 0) + (result.cost[position.currency] || 0);
@@ -220,7 +224,9 @@ function AddPositionSummaryRow(positions) {
     cellFixedPnL.title = totalFixedPnLTitle;
     cellFixedPnL.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
 
-    positionRow.querySelector("td.portfolio-asset").innerHTML = "";
+    const assetCell = positionRow.querySelector("td.portfolio-asset");
+    assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
+    assetCell.addEventListener("click", OnOperationsLinkClick);
 
     const tbody = document.querySelector("#portfolio-table tbody.positions-summary-row");
     tbody.appendChild(positionRow);
@@ -278,7 +284,33 @@ function OnPositionClick(position) {
     }
     // Открываем вкладку
     $(`#${ticker}-tab`).tab('show');
+}
 
+// Обработчик нажатия на ссылку операций
+function OnOperationsLinkClick() {
+    const ticker = "Operations";
+    const mainNav = document.querySelector("#main-nav");
+    // Если вкладка не существует
+    if (!mainNav.querySelector(`#${ticker}-tab`)) {
+        // Создаём и добавляем вкладку
+        const mainTabContent = document.querySelector("#main-tab-content");
+        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-money-template", ticker, ticker);
+        mainNav.appendChild(tab);
+        mainTabContent.appendChild(tabPane);
+
+        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(ticker));
+
+        tabPane.querySelector(".loading-content-text").textContent = "Loading...";
+        window.TTApi.LoadFillsByFigi()
+            .then((operations) => {
+                tabPane.querySelector(".loading-content-text").textContent = "";
+                DrawSystemOperations(operations);
+            });
+        const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
+        setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
+    }
+    // Открываем вкладку
+    $(`#${ticker}-tab`).tab('show');
 }
 
 // Обработчик нажатия на кнопку удаления позиции
@@ -351,6 +383,135 @@ function DrawOperations(position, fills) {
 
     tbody.prepend(fillRow);
 }
+
+async function DrawSystemOperations(operations) {
+    const ticker = "Operations";
+    const filteredOperations = operations
+        .filter(item => !["Buy", "BuyCard", "Sell", "BrokerCommission"].includes(item.operationType))
+        .filter(item => operationsFilter.includes(item.operationType));
+
+    const distinct = (value, index, self) => self.indexOf(value) === index;
+    const positions = await Promise.all(filteredOperations
+        .map(item => item.figi)
+        .filter(distinct)
+        .filter(item => item != undefined)
+        .map(async (figi) => await TTApi.FindPosition(figi)));
+
+
+    let total = {}; // Сумма, сгруппированная по каждому типу и валюте
+
+    const applyStyleByType = (cell, operationType) => {
+        switch (operationType) {
+            case "MarginCommission":
+            case "ServiceCommission":
+            case "TaxDividend":
+            case "Tax":
+                cell.className = "text-danger";
+                break;
+
+            case "Dividend":
+            case "Coupon":
+            case "PayIn":
+                cell.className = "text-success";
+                break;
+
+            case "PayOut":
+                cell.className = "text-warning";
+                break;
+        }
+    }
+
+    const tbody = document.querySelector(`#${ticker} table tbody.money-detailed`);
+    tbody.innerHTML = "";
+
+    filteredOperations
+        .reverse()
+        .forEach((item, index) => {
+            const fillRow = document.querySelector("#money-row-template").content.firstElementChild.cloneNode(true);
+
+            const cellIndex = fillRow.querySelector("td.money-index");
+            cellIndex.textContent = index + 1;
+
+            const cellTime = fillRow.querySelector("td.money-time");
+            cellTime.textContent = item.date.substring(0, 19).replace(/-/g, "/").replace("T", " ");
+            cellTime.title = new Date(item.date).toString().split(" (")[0];
+
+            const cellPayment = fillRow.querySelector("td.money-payment");
+            cellPayment.textContent = printMoney(item.payment, item.currency);
+
+            const cellType = fillRow.querySelector("td.money-type span");
+            cellType.textContent = item.operationType;
+            applyStyleByType(cellType, item.operationType);
+
+            const cellAsset = fillRow.querySelector("td.portfolio-asset");
+            if (item.operationType == "Dividend" || item.operationType == "Coupon" || item.operationType == "TaxDividend") {
+                const position = positions.find(position => position.figi == item.figi);
+                if (position != undefined) {
+                    cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + position.instrumentType.toLowerCase() + "s/" + position.ticker;
+                    cellAsset.querySelector("a").title = cellAsset.querySelector("a").href;
+                    cellAsset.querySelector("span").textContent = position.instrumentType === "Stock"
+                        ? position.ticker + ' - ' + position.name
+                        : position.name;
+                    cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
+                }
+                else {
+                    cellAsset.textContent = item.figi;
+                    cellAsset.title = "Failed to find instrument";
+                }
+            }
+            else {
+                cellAsset.textContent = "";
+            }
+
+            // Подсчитываем сумму
+            if (total[item.operationType] == undefined) {
+                total[item.operationType] = {};
+            }
+            if (total[item.operationType][item.currency] == undefined) {
+                total[item.operationType][item.currency] = 0;
+            }
+            total[item.operationType][item.currency] = total[item.operationType][item.currency] + item.payment;
+
+            // Добавляем строку
+            tbody.prepend(fillRow);
+        });
+
+    const tbodySummary = document.querySelector(`#${ticker} table tbody.money-summary`);
+    tbodySummary.innerHTML = "";
+
+    const selectedCurrency = localStorage["selectedCurrency"] || "RUB";
+
+    Object.keys(total)
+        .filter(key => key == "MarginCommission" || key == "ServiceCommission" || key == "Dividend" || key == "Coupon")
+        .forEach(key => {
+            const group = total[key];
+            let totalValue = 0;
+            let totalValueTitle = `Total ${key} \n`;
+
+            // Конвертируем из других валют в выбранную
+            Object.keys(group).forEach(currency => {
+                totalValue += group[currency] * GetCurrencyRate(currency, selectedCurrency)
+                totalValueTitle += `${currency}: ${printMoney(group[currency], currency)}\n`;
+            });
+
+            const fillRow = document.querySelector("#money-row-template").content.firstElementChild.cloneNode(true);
+
+            const cellPayment = fillRow.querySelector("td.money-payment");
+            cellPayment.textContent = printMoney(totalValue, selectedCurrency);
+
+            const cellType = fillRow.querySelector("td.money-type span");
+            cellType.textContent = key;
+            applyStyleByType(cellType, key);
+            cellType.title = totalValueTitle;
+            cellType.classList.add("cursor-help");
+
+            const cellAsset = fillRow.querySelector("td.portfolio-asset");
+            cellAsset.textContent = "";
+
+            tbodySummary.append(fillRow);
+        });
+}
+
 
 //#endregion
 
@@ -521,6 +682,89 @@ addPositionForm.addEventListener("submit", (e) => {
 
 // #endregion
 
+// #region Filter operations form
+
+const filterOperationsForm = document.getElementById("filter-operations-form");
+const filterOperationsContainer = filterOperationsForm.querySelector(".modal-body .checkboxes-container");
+const filterOperationsError = filterOperationsForm.querySelector(".status-message");
+
+filterOperationsForm.querySelector("#filter-operations-select-all").addEventListener("click", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+    filterOperationsForm.querySelectorAll("[name=operationType]")
+        .forEach(checkbox => checkbox.checked = true);
+});
+
+filterOperationsForm.querySelector("#filter-operations-select-none").addEventListener("click", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+    filterOperationsForm.querySelectorAll("[name=operationType]")
+        .forEach(checkbox => checkbox.checked = false);
+});
+
+
+const operationTypes = [
+    "MarginCommission",
+    "ServiceCommission",
+    "TaxDividend",
+    "Tax",
+    "Dividend",
+    "Coupon",
+    "PayIn",
+    "PayOut",
+];
+const defaultOperationsFilter = operationTypes;
+let operationsFilter = JSON.parse(localStorage.getItem('operationsFilter')) || defaultOperationsFilter;
+
+$('#filter-operations-modal').on('shown.bs.modal', function () {
+    AddFilterOperationsCheckboxes();
+});
+
+function AddFilterOperationsCheckboxes() {
+    filterOperationsContainer.textContent = "";
+    operationTypes.forEach(item => {
+        const checkbox = document.querySelector('#filter-operations-checkbox-template').content.firstElementChild.cloneNode(true);
+
+        const checkboxInput = checkbox.querySelector('input');
+        checkboxInput.id = item;
+        checkboxInput.name = "operationType";
+        checkboxInput.checked = operationsFilter.includes(item);
+
+        const checkboxLabel = checkbox.querySelector('label');
+        checkboxLabel.textContent = item;
+        checkboxLabel.setAttribute("for", item);
+
+        filterOperationsContainer.appendChild(checkbox);
+    });
+}
+
+filterOperationsForm.addEventListener("submit", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+    let filter = [];
+    const checkboxes = filterOperationsForm.querySelectorAll("[name=operationType]");
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            filter.push(checkbox.id);
+        }
+    });
+
+    if (filter.length == 0) {
+        filterOperationsError.textContent = "Select at least one option";
+        return;
+    } else {
+        filterOperationsError.textContent = "";
+        operationsFilter = filter;
+    }
+
+    localStorage.setItem('operationsFilter', JSON.stringify(operationsFilter));
+
+    const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
+    setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
+
+    DrawSystemOperations(TTApi.operations[undefined]);
+
+    $('#filter-operations-modal').modal('hide');
+});
+
+// #endregion
 
 // #region Settings
 
@@ -539,6 +783,5 @@ updateIntervalInput.addEventListener("change", (e) => {
     console.log(`Positions update interval changed. New value: ${updateIntervalTimeout} ms`)
     loopLoadPortfolio();
 });
-
 
 // #endregion
