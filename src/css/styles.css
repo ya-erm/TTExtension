@@ -40,6 +40,11 @@
     top: 1rem;
 } 
 
+.portfolio-all-day-switch {
+    text-decoration: underline;
+    font-weight: 400;
+}
+
 .portfolio-logo {
     height: 20px;
     width: 20px;
