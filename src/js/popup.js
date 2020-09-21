@@ -18,6 +18,21 @@ const token = localStorage["token"];
 let updateIntervalTimeout = localStorage["positionsUpdateIntervalInput"] || 60 * 1000;
 let positionsUpdateTimerId;
 
+// Переключатель периода отображения прибыли
+const portfolioAllDaySwitch = document.querySelector(".portfolio-all-day-switch");
+portfolioAllDaySwitch.addEventListener("click", ChangePortfolioAllDay);
+let portfolioAllDayPeriod = localStorage["portfolioAllDaySwitch"] || "All";
+portfolioAllDaySwitch.textContent = portfolioAllDayPeriod;
+
+// Изменить период отображаемой прибыли: за всё время или за торговый день
+function ChangePortfolioAllDay() {
+    portfolioAllDayPeriod = (portfolioAllDayPeriod == "All") ? "Day" : "All";
+    portfolioAllDaySwitch.textContent = portfolioAllDayPeriod;
+    localStorage["portfolioAllDaySwitch"] = portfolioAllDayPeriod;
+    window.TTApi.positions.forEach(position => AddOrUpdatePosition(position));
+    AddPositionSummaryRow(window.TTApi.positions);
+}
+
 if (token) {
     window.TTApi.token = token;
     document.getElementById("token-input").value = token;
@@ -148,8 +163,31 @@ function FillPositionRow(positionRow, position) {
     setClassIf(cellExpected, "inaccurate-value-text", position.needCalc);
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
-    cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
-    cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
+    if (portfolioAllDayPeriod == "All") {
+        cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
+        cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
+    } else {
+        const fixedPnLToday = GetTodayFixedPnL(position);
+        cellFixedPnL.textContent = printMoney(fixedPnLToday, position.currency, true);
+        cellFixedPnL.className = getMoneyColorClass(fixedPnLToday);
+    }
+}
+
+// Рассчитать зафиксированную прибыль за торговый день
+function GetTodayFixedPnL(position) {
+    const now = new Date();
+    const fills = window.TTApi.fills[position.ticker] || [];
+    const fillsToday = fills.filter(fill => {
+        if (fill.fixedPnL == undefined) { return false; }
+        const fillDate = new Date(fill.date);
+        if (now.getUTCHours() < 7) { // 7 UTC = 10 MSK
+            return fillDate > new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 7));
+        } else {
+            return fillDate > new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 7));
+        }
+    });
+    const fixedPnLToday = fillsToday.reduce((sum, fill) => sum + fill.fixedPnL, 0);
+    return fixedPnLToday != 0 ? fixedPnLToday : undefined;
 }
 
 /**
@@ -188,7 +226,8 @@ function AddPositionSummaryRow(positions) {
     const total = positions.reduce((result, position) => {
         result.cost[position.currency] = (position.count || 0) * (position.average || 0) + (position.expected || 0) + (result.cost[position.currency] || 0);
         result.expected[position.currency] = (position.expected || 0) + (result.expected[position.currency] || 0);
-        result.fixedPnL[position.currency] = (position.fixedPnL || 0) + (result.fixedPnL[position.currency] || 0);
+        const fixedPnL = (portfolioAllDayPeriod == "All") ? position.fixedPnL : GetTodayFixedPnL(position);
+        result.fixedPnL[position.currency] = (fixedPnL || 0) + (result.fixedPnL[position.currency] || 0);
         return result;
     }, { cost: {}, expected: {}, fixedPnL: {} });
 
@@ -206,23 +245,28 @@ function AddPositionSummaryRow(positions) {
         return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
 
-    let totalFixedPnLTitle = "Total fixed P&L \n";
+    let totalFixedPnLTitle = (portfolioAllDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
         totalFixedPnLTitle += `${key}: ${printMoney(total.fixedPnL[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
     }, 0);
+
+    const cellCost = positionRow.querySelector("td.portfolio-cost");
+    cellCost.textContent = "Total:"
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     cellExpected.textContent = printMoney(totalExpected, selectedCurrency, true);
     cellExpected.className = getMoneyColorClass(totalExpected);
     cellExpected.title = totalExpectedTitle;
     cellExpected.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    setClassIf(cellExpected, "cursor-pointer", true);
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
     cellFixedPnL.textContent = printMoney(totalFixedPnL, selectedCurrency, true);
     cellFixedPnL.className = getMoneyColorClass(totalFixedPnL);
     cellFixedPnL.title = totalFixedPnLTitle;
     cellFixedPnL.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    setClassIf(cellFixedPnL, "cursor-pointer", true);
 
     const assetCell = positionRow.querySelector("td.portfolio-asset");
     assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
