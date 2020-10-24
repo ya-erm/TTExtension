@@ -308,14 +308,14 @@ function OnPositionClick(position) {
     const ticker = position.ticker;
     const mainNav = document.querySelector("#main-nav");
     // Если вкладка не существует
-    if (!mainNav.querySelector(`#${ticker}-tab`)) {
+    if (!mainNav.querySelector(`#${convertToSlug(ticker)}-tab`)) {
         // Создаём и добавляем вкладку
         const mainTabContent = document.querySelector("#main-tab-content");
-        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-fills-template", ticker, ticker);
+        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-fills-template", ticker, convertToSlug(ticker));
         mainNav.appendChild(tab);
         mainTabContent.appendChild(tabPane);
 
-        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(ticker));
+        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(convertToSlug(ticker)));
 
         // Отображаем сделки из памяти
         if (window.TTApi.fills[position.ticker]) {
@@ -327,7 +327,7 @@ function OnPositionClick(position) {
             .then((fills) => DrawOperations(position, fills));
     }
     // Открываем вкладку
-    $(`#${ticker}-tab`).tab('show');
+    $(`#${convertToSlug(ticker)}-tab`).tab('show');
 }
 
 // Обработчик нажатия на ссылку операций
@@ -367,7 +367,7 @@ function OnPositionRemoveClick(position) {
 // #region Operations
 
 function DrawOperations(position, fills) {
-    const tbody = document.querySelector(`#${position.ticker} table tbody`)
+    const tbody = document.querySelector(`#${convertToSlug(position.ticker)} table tbody`)
     tbody.innerHTML = "";
 
     fills.forEach((item, index) => {
@@ -610,6 +610,16 @@ function setClassIf(element, className, condition) {
     else if (condition && !element.classList.contains(className)) {
         element.classList.add(className);
     }
+}
+
+/**
+ * Преобразовать строку к "безопасному" виду, содержащему только A-Z, a-z, 0-9, -, _
+ * @param {string} text 
+ */
+function convertToSlug(text) {
+    return text
+        .replace(/ /g,'-')
+        .replace(/[^\w-]+/g,'_');
 }
 
 // #endregion
