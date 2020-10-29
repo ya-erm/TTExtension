@@ -12,6 +12,7 @@ chrome.runtime.onMessage.addListener(
             console.log("Overriding of average price on Web Terminal page is disabled");
             sendResponse();
         } else {
+            // TODO добавить поддержку ИИС
             var positions = JSON.parse(localStorage.getItem('positions')) || [];
             sendResponse(positions);
         }
