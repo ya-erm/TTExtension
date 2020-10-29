@@ -1,24 +1,26 @@
 /* Этот скрипт выполняется на разрешённых страницах */
 
 // Обработчик обновлений позиции
-var HandlePositionsUpdate = (positions) => {
-    console.log("Updating positions average price from TTExtension");
-    positions?.forEach(position => {
-        try {
-            window.TTWebApi.SetAvgPrice(position.ticker, position.average, position.currency);
-            window.TTWebApi.CalculateProfit(position.ticker, position.currency);
-        }
-        catch (exception) {
-            console.log(`Error was occurred while processing position ${position}`);
-            console.log(exception);
-        }
-    });
+function handlePositionsUpdate(positions) {
+    if (!!positions) {
+        console.log("Updating positions average price from TTExtension");
+        positions.forEach(position => {
+            try {
+                window.TTWebApi.setAvgPrice(position.ticker, position.average, position.currency);
+                window.TTWebApi.calculateProfit(position.ticker, position.currency);
+            }
+            catch (exception) {
+                console.log(`Error was occurred while processing position ${position}`);
+                console.log(exception);
+            }
+        });
+    }
 }
 
 if (document.URL.startsWith("https://www.tinkoff.ru/invest-terminal")) {
     // Каждые 5 секунд запрашиваем список позиций из расширения
     setInterval(() => {
-        chrome.runtime.sendMessage({ type: "GetPositions" }, HandlePositionsUpdate);
+        chrome.runtime.sendMessage({ type: "GetPositions" }, handlePositionsUpdate);
     }, 5000);
 }
 
@@ -29,12 +31,12 @@ if (!window.TTWebApi) { window.TTWebApi = {}; }
 
 window.TTWebApi = {
     ...window.TTWebApi,
-    SetAvgPrice,
-    CalculateProfit,
+    setAvgPrice,
+    calculateProfit,
 }
 
 // Поиск ячейки в таблице по заголовку столбца
-function FindCell(table, row, title) {
+function findCell(table, row, title) {
     var cellIndex = -1;
     const headerCells = table.querySelectorAll('th');
     for (var i = 0; i < headerCells.length; i++) {
@@ -57,13 +59,13 @@ function FindCell(table, row, title) {
   * @param {number} price - Средняя цена
   * @param {string} currency - Валюта
   */
-function SetAvgPrice(asset, price, currency) {
+function setAvgPrice(asset, price, currency) {
     const portfolioTable = document.querySelector('[data-widget-type="PORTFOLIO_WIDGET"]');
     const row = portfolioTable.querySelector(`[data-symbol-id="${asset}"]`);
 
     if (row == undefined) { return; }
 
-    const avgCell = FindCell(portfolioTable, row, "Средняя");
+    const avgCell = findCell(portfolioTable, row, "Средняя");
     if (avgCell == null || price == undefined) { return; }
 
     avgCell.textContent = printMoney(price, currency);
@@ -75,15 +77,15 @@ function SetAvgPrice(asset, price, currency) {
   * @param {string} asset - Название инструмента
   * @param {string} currency - Валюта
   */
-function CalculateProfit(asset, currency) {
+function calculateProfit(asset, currency) {
     const portfolioTable = document.querySelector('[data-widget-type="PORTFOLIO_WIDGET"]');
     const row = portfolioTable.querySelector(`[data-symbol-id="${asset}"]`);
 
     if (row == undefined) { return; }
 
-    const avgCell = FindCell(portfolioTable, row, "Средняя");
-    const priceCell = FindCell(portfolioTable, row, "Цена");
-    const countCell = FindCell(portfolioTable, row, "Всего");
+    const avgCell = findCell(portfolioTable, row, "Средняя");
+    const priceCell = findCell(portfolioTable, row, "Цена");
+    const countCell = findCell(portfolioTable, row, "Всего");
     if (avgCell == null || priceCell == null || countCell == null) { return; }
 
     const avgPrice = Number.parseFloat(avgCell.textContent.replace(',', '.').replace(' ', ''));
@@ -92,14 +94,14 @@ function CalculateProfit(asset, currency) {
 
     const profit = (curPrice - avgPrice) * count;
 
-    const profitCell = FindCell(portfolioTable, row, "Доход").querySelector("div");
-    if (profitCell != null) { 
+    const profitCell = findCell(portfolioTable, row, "Доход").querySelector("div");
+    if (profitCell != null) {
         profitCell.textContent = printMoney(profit, currency);
         setClassIf(profitCell, "profit", profit > 0);
         setClassIf(profitCell, "loss", profit < 0);
     }
 
-    const profitPercentsCell = FindCell(portfolioTable, row, "Доход, %").querySelector("div");
+    const profitPercentsCell = findCell(portfolioTable, row, "Доход, %").querySelector("div");
     if (profitPercentsCell != null) {
         const profitPercents = 100 * profit / (avgPrice * Math.abs(count));
         profitPercentsCell.textContent = printMoney(profitPercents, '%');
@@ -134,7 +136,7 @@ function printMoney(value, currency, withSign = false) {
   * @param {string} className - Название класса
   * @param {boolean} condition - Условие, при выполнении которого класс будет применён
   */
- function setClassIf(element, className, condition) {
+function setClassIf(element, className, condition) {
     if (!condition && element.classList.contains(className)) {
         element.classList.remove(className);
     }

@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*/*"
+        "https://*.tinkoff.ru/invest-terminal/*"
       ],
       "js": [
         "src/js/content.js"
@@ -24,7 +24,7 @@
     ]
   },
   "permissions": [
-    "https://www.tinkoff.ru/invest-terminal/*",
+    "https://*.tinkoff.ru/invest-terminal/*",
     "https://api-invest.tinkoff.ru/openapi/*"
   ],
   "browser_action": {

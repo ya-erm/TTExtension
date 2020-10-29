@@ -1,4 +1,4 @@
-if (!window.TTApi) { window.TTApi = {}; }
+import { TTApi } from "./TTApi.js";
 
 const eraseButton = document.getElementById("erase-button");
 eraseButton.addEventListener("click", () => {
@@ -8,42 +8,39 @@ eraseButton.addEventListener("click", () => {
     $("#portfolio-table tbody").children().remove();
     $(".nav-item[data-closable='true']").remove();
     document.querySelector(".portfolio-total-cost").innerHTML = "";
-    window.TTApi.erase();
+    TTApi.eraseData();
     // Скрываем кнопку очистки хранилища
     setClassIf(eraseButton, "d-none", true);
 });
 
 // Загружаем токен из localStorage
-const token = localStorage["token"];
 let updateIntervalTimeout = localStorage["positionsUpdateIntervalInput"] || 60 * 1000;
 let positionsUpdateTimerId;
 
 // Переключатель периода отображения прибыли
 const portfolioAllDaySwitch = document.querySelector(".portfolio-all-day-switch");
-portfolioAllDaySwitch.addEventListener("click", ChangePortfolioAllDay);
+portfolioAllDaySwitch.addEventListener("click", changePortfolioAllDay);
 let portfolioAllDayPeriod = localStorage["portfolioAllDaySwitch"] || "All";
 portfolioAllDaySwitch.textContent = portfolioAllDayPeriod;
 
 // Изменить период отображаемой прибыли: за всё время или за торговый день
-function ChangePortfolioAllDay() {
+function changePortfolioAllDay() {
     portfolioAllDayPeriod = (portfolioAllDayPeriod == "All") ? "Day" : "All";
     portfolioAllDaySwitch.textContent = portfolioAllDayPeriod;
     localStorage["portfolioAllDaySwitch"] = portfolioAllDayPeriod;
-    window.TTApi.positions.forEach(position => AddOrUpdatePosition(position));
-    AddPositionSummaryRow(window.TTApi.positions);
+    TTApi.positions.forEach(position => AddOrUpdatePosition(position));
+    addPositionSummaryRow(TTApi.positions);
 }
 
-if (token) {
-    window.TTApi.token = token;
-    document.getElementById("token-input").value = token;
+if (!!TTApi.token) {
+    document.getElementById("token-input").value = TTApi.token;
 
     // Отображаем позиции из памяти
-    window.TTApi.positions.forEach(position => AddPositionRow(position))
-    AddPositionSummaryRow(window.TTApi.positions);
+    TTApi.positions.forEach(position => addPositionRow(position))
+    addPositionSummaryRow(TTApi.positions);
 
     // Загружаем новые позиции и обновляем таблицу
     loopLoadPortfolio();
-
 } else {
     // Открываем вкладку настроек
     $("#settings-tab").tab("show");
@@ -57,19 +54,19 @@ if (token) {
 window.addEventListener("PositionUpdated", function (event) {
     const { position } = event.detail;
     AddOrUpdatePosition(position);
-    AddPositionSummaryRow(window.TTApi.positions);
+    addPositionSummaryRow(TTApi.positions);
 });
 
 // Обработчик события удаления позиции
 window.addEventListener("PositionRemoved", function (event) {
     const { position } = event.detail;
     document.querySelector(`#position-${position.figi}`)?.remove();
-    AddPositionSummaryRow(window.TTApi.positions);
+    addPositionSummaryRow(TTApi.positions);
 });
 
 // Загрузка портфеля
 function loadPortfolio() {
-    window.TTApi.LoadPortfolio()
+    TTApi.loadPortfolio()
         .then(positions => positions.forEach(position => AddOrUpdatePosition(position)));
 }
 
@@ -85,9 +82,9 @@ function loopLoadPortfolio() {
 function AddOrUpdatePosition(position) {
     var positionRow = document.getElementById(`position-${position.figi}`);
     if (!positionRow) {
-        AddPositionRow(position);
+        addPositionRow(position);
     } else {
-        FillPositionRow(positionRow, position);
+        fillPositionRow(positionRow, position);
     }
 }
 
@@ -95,7 +92,7 @@ function AddOrUpdatePosition(position) {
   * Создать новую строку в таблице позиций
   * @param {object} position - позиция
   */
-function AddPositionRow(position) {
+function addPositionRow(position) {
     const positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
     positionRow.id = `position-${position.figi}`;
 
@@ -107,7 +104,7 @@ function AddPositionRow(position) {
         : position.name;
     cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
 
-    FillPositionRow(positionRow, position);
+    fillPositionRow(positionRow, position);
 
     const tbody = document.querySelector(`#portfolio-table tbody.positions-${position.instrumentType.toLowerCase()}`);
     if (!tbody.querySelector(".group-row")) {
@@ -117,7 +114,7 @@ function AddPositionRow(position) {
     }
     tbody.appendChild(positionRow);
 
-    positionRow.addEventListener("click", () => OnPositionClick(position));
+    positionRow.addEventListener("click", () => onPositionClick(position));
 }
 
 /**
@@ -125,14 +122,14 @@ function AddPositionRow(position) {
   * @param {object} positionRow - строка таблицы
   * @param {object} position - позиция
   */
-function FillPositionRow(positionRow, position) {
+function fillPositionRow(positionRow, position) {
     if (position.count == 0) {
         if (!positionRow.querySelector(".portfolio-asset-button-remove")) {
             const buttonRemove = document.querySelector("#portfolio-asset-button-remove-template").content.firstElementChild.cloneNode(true);
             buttonRemove.addEventListener("click", (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                OnPositionRemoveClick(position);
+                onPositionRemoveClick(position);
             });
             positionRow.querySelector(".portfolio-asset div").appendChild(buttonRemove);
         }
@@ -167,16 +164,16 @@ function FillPositionRow(positionRow, position) {
         cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
     } else {
-        const fixedPnLToday = GetTodayFixedPnL(position);
+        const fixedPnLToday = getTodayFixedPnL(position);
         cellFixedPnL.textContent = printMoney(fixedPnLToday, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(fixedPnLToday);
     }
 }
 
 // Рассчитать зафиксированную прибыль за торговый день
-function GetTodayFixedPnL(position) {
+function getTodayFixedPnL(position) {
     const now = new Date();
-    const fills = window.TTApi.fills[position.ticker] || [];
+    const fills = TTApi.fills[position.ticker] || [];
     const fillsToday = fills.filter(fill => {
         if (fill.fixedPnL == undefined) { return false; }
         const fillDate = new Date(fill.date);
@@ -195,17 +192,17 @@ function GetTodayFixedPnL(position) {
   * @param {string} from - из какой валюты
   * @param {string} to - в какую валюту
   */
-function GetCurrencyRate(from, to) {
+function getCurrencyRate(from, to) {
     if (from == to) { return 1.0 }
 
-    const usdToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HGFT4")?.lastPrice; // Доллар США
+    const usdToRub = TTApi.positions.find(_ => _.figi == "BBG0013HGFT4")?.lastPrice; // Доллар США
     if (from == "USD" && to == "RUB") {
         return usdToRub;
     } else if (from == "RUB" && to == "USD") {
         return 1.0 / usdToRub;
     }
 
-    const eurToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HJJ31")?.lastPrice; // Евро
+    const eurToRub = TTApi.positions.find(_ => _.figi == "BBG0013HJJ31")?.lastPrice; // Евро
     if (from == "EUR" && to == "RUB") {
         return eurToRub;
     } else if (from == "RUB" && to == "EUR") {
@@ -214,7 +211,7 @@ function GetCurrencyRate(from, to) {
 }
 
 // Добавить итоговую строку по позициям
-function AddPositionSummaryRow(positions) {
+function addPositionSummaryRow(positions) {
     let positionRow = document.getElementById("position-summary");
     if (positionRow) { positionRow.remove(); }
 
@@ -226,7 +223,7 @@ function AddPositionSummaryRow(positions) {
     const total = positions.reduce((result, position) => {
         result.cost[position.currency] = (position.count || 0) * (position.average || 0) + (position.expected || 0) + (result.cost[position.currency] || 0);
         result.expected[position.currency] = (position.expected || 0) + (result.expected[position.currency] || 0);
-        const fixedPnL = (portfolioAllDayPeriod == "All") ? position.fixedPnL : GetTodayFixedPnL(position);
+        const fixedPnL = (portfolioAllDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(position);
         result.fixedPnL[position.currency] = (fixedPnL || 0) + (result.fixedPnL[position.currency] || 0);
         return result;
     }, { cost: {}, expected: {}, fixedPnL: {} });
@@ -236,19 +233,19 @@ function AddPositionSummaryRow(positions) {
     let totalCostTitle = "Portfolio cost now \n";
     const totalCost = Object.keys(total.expected).reduce((result, key) => {
         totalCostTitle += `${key}: ${printMoney(total.cost[key], key)}\n`;
-        return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.cost[key];
+        return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.cost[key];
     }, 0);
 
     let totalExpectedTitle = "Total expected \n";
     const totalExpected = Object.keys(total.expected).reduce((result, key) => {
         totalExpectedTitle += `${key}: ${printMoney(total.expected[key], key)}\n`;
-        return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.expected[key];
+        return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
 
     let totalFixedPnLTitle = (portfolioAllDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
         totalFixedPnLTitle += `${key}: ${printMoney(total.fixedPnL[key], key)}\n`;
-        return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
+        return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
     }, 0);
 
     const cellCost = positionRow.querySelector("td.portfolio-cost");
@@ -258,19 +255,19 @@ function AddPositionSummaryRow(positions) {
     cellExpected.textContent = printMoney(totalExpected, selectedCurrency, true);
     cellExpected.className = getMoneyColorClass(totalExpected);
     cellExpected.title = totalExpectedTitle;
-    cellExpected.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    cellExpected.addEventListener('click', _ => changeSelectedCurrency(selectedCurrency));
     setClassIf(cellExpected, "cursor-pointer", true);
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
     cellFixedPnL.textContent = printMoney(totalFixedPnL, selectedCurrency, true);
     cellFixedPnL.className = getMoneyColorClass(totalFixedPnL);
     cellFixedPnL.title = totalFixedPnLTitle;
-    cellFixedPnL.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    cellFixedPnL.addEventListener('click', _ => changeSelectedCurrency(selectedCurrency));
     setClassIf(cellFixedPnL, "cursor-pointer", true);
 
     const assetCell = positionRow.querySelector("td.portfolio-asset");
     assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
-    assetCell.addEventListener("click", OnOperationsLinkClick);
+    assetCell.addEventListener("click", onOperationsLinkClick);
 
     const tbody = document.querySelector("#portfolio-table tbody.positions-summary-row");
     tbody.appendChild(positionRow);
@@ -279,9 +276,10 @@ function AddPositionSummaryRow(positions) {
     const oldTotalCost = parseFloat(totalCostSpan.innerHTML.replace(/ /g, ''));
     totalCostSpan.innerHTML = printMoney(totalCost, selectedCurrency);
     totalCostSpan.title = totalCostTitle;
-    totalCostSpan.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    totalCostSpan.addEventListener('click', _ => changeSelectedCurrency(selectedCurrency));
 
     if (oldTotalCost && Math.abs(totalCost - oldTotalCost) > 0.01) {
+        console.log('Portfolio changed:', 'oldTotalCost', oldTotalCost, 'totalCost', totalCost);
         const totalCostChange = totalCost - oldTotalCost;
         const totalCostChangeSpan = document.querySelector(".portfolio-total-cost-change");
         totalCostChangeSpan.innerHTML = printMoney(totalCostChange, selectedCurrency, true);
@@ -293,59 +291,59 @@ function AddPositionSummaryRow(positions) {
 }
 
 // Изменить выбранную для отображения итоговой суммы валюту
-function ChangeSelectedCurrency(selectedCurrency) {
+function changeSelectedCurrency(selectedCurrency) {
     if (selectedCurrency == "RUB") {
         selectedCurrency = "USD";
     } else {
         selectedCurrency = "RUB";
     }
     localStorage.setItem("selectedCurrency", selectedCurrency);
-    AddPositionSummaryRow(window.TTApi.positions);
+    addPositionSummaryRow(TTApi.positions);
 };
 
 // Обработчик нажатия на строку в таблице позиций
-function OnPositionClick(position) {
+function onPositionClick(position) {
     const ticker = position.ticker;
     const mainNav = document.querySelector("#main-nav");
     // Если вкладка не существует
     if (!mainNav.querySelector(`#${convertToSlug(ticker)}-tab`)) {
         // Создаём и добавляем вкладку
         const mainTabContent = document.querySelector("#main-tab-content");
-        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-fills-template", ticker, convertToSlug(ticker));
+        const { tab, tabPane } = createTab("nav-tab-template", "tab-pane-fills-template", ticker, convertToSlug(ticker));
         mainNav.appendChild(tab);
         mainTabContent.appendChild(tabPane);
 
-        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(convertToSlug(ticker)));
+        tab.querySelector(".tab-close-button").addEventListener('click', () => closeTab(convertToSlug(ticker)));
 
         // Отображаем сделки из памяти
-        if (window.TTApi.fills[position.ticker]) {
-            DrawOperations(position, window.TTApi.fills[position.ticker]);
+        if (TTApi.fills[position.ticker]) {
+            drawOperations(position, TTApi.fills[position.ticker]);
         }
 
         // Загружаем новые сделки и обновляем таблицу
-        window.TTApi.LoadFillsByFigi(position.figi)
-            .then((fills) => DrawOperations(position, fills));
+        TTApi.loadFillsByFigi(position.figi)
+            .then((fills) => drawOperations(position, fills));
     }
     // Открываем вкладку
     $(`#${convertToSlug(ticker)}-tab`).tab('show');
 }
 
 // Обработчик нажатия на ссылку операций
-function OnOperationsLinkClick() {
+function onOperationsLinkClick() {
     const ticker = "Operations";
     const mainNav = document.querySelector("#main-nav");
     // Если вкладка не существует
     if (!mainNav.querySelector(`#${ticker}-tab`)) {
         // Создаём и добавляем вкладку
         const mainTabContent = document.querySelector("#main-tab-content");
-        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-money-template", ticker, ticker);
+        const { tab, tabPane } = createTab("nav-tab-template", "tab-pane-money-template", ticker, ticker);
         mainNav.appendChild(tab);
         mainTabContent.appendChild(tabPane);
 
-        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(ticker));
+        tab.querySelector(".tab-close-button").addEventListener('click', () => closeTab(ticker));
 
         tabPane.querySelector(".loading-content-text").textContent = "Loading...";
-        window.TTApi.LoadFillsByFigi()
+        TTApi.loadFillsByFigi()
             .then((operations) => {
                 tabPane.querySelector(".loading-content-text").textContent = "";
                 DrawSystemOperations(operations);
@@ -358,15 +356,15 @@ function OnOperationsLinkClick() {
 }
 
 // Обработчик нажатия на кнопку удаления позиции
-function OnPositionRemoveClick(position) {
-    window.TTApi.RemovePosition(position);
+function onPositionRemoveClick(position) {
+    TTApi.removePosition(position);
 }
 
 // #endregion
 
 // #region Operations
 
-function DrawOperations(position, fills) {
+function drawOperations(position, fills) {
     const tbody = document.querySelector(`#${convertToSlug(position.ticker)} table tbody`)
     tbody.innerHTML = "";
 
@@ -439,7 +437,7 @@ async function DrawSystemOperations(operations) {
         .map(item => item.figi)
         .filter(distinct)
         .filter(item => item != undefined)
-        .map(async (figi) => await TTApi.FindPosition(figi)));
+        .map(async (figi) => await TTApi.findPosition(figi)));
 
 
     let total = {}; // Сумма, сгруппированная по каждому типу и валюте
@@ -534,7 +532,7 @@ async function DrawSystemOperations(operations) {
 
             // Конвертируем из других валют в выбранную
             Object.keys(group).forEach(currency => {
-                totalValue += group[currency] * GetCurrencyRate(currency, selectedCurrency)
+                totalValue += group[currency] * getCurrencyRate(currency, selectedCurrency)
                 totalValueTitle += `${currency}: ${printMoney(group[currency], currency)}\n`;
             });
 
@@ -618,8 +616,8 @@ function setClassIf(element, className, condition) {
  */
 function convertToSlug(text) {
     return text
-        .replace(/ /g,'-')
-        .replace(/[^\w-]+/g,'_');
+        .replace(/ /g, '-')
+        .replace(/[^\w-]+/g, '_');
 }
 
 // #endregion
@@ -633,7 +631,7 @@ function convertToSlug(text) {
   * @param {string} title - Заголовок вкладки
   * @param {string} href - Идентификатор вкладки
   */
-function CreateTab(tabTemplateId, tabPaneTemplateId, title, href) {
+function createTab(tabTemplateId, tabPaneTemplateId, title, href) {
     if (!href) { href = title.toLocaleLowerCase(); }
 
     // Добавляем вкладку
@@ -656,7 +654,7 @@ function CreateTab(tabTemplateId, tabPaneTemplateId, title, href) {
   * Закрыть вкладку
   * @param {string} href - Идентификатор вкладки
   */
-function CloseTab(href) {
+function closeTab(href) {
     const tab = document.querySelector(`.nav-item a[href="#${href}"]`).closest(".nav-item");
     const tabPane = document.getElementById(href);
     const navTabs = tab.closest(".nav-tabs");
@@ -682,8 +680,8 @@ tokenForm.addEventListener("submit", (e) => {
 
     const data = new FormData(tokenForm);
     const token = data.get("token");
-    localStorage["token"] = token;
-    window.TTApi.token = token;
+    localStorage.setItem("token", token);
+    TTApi.token = token;
 
     setClassIf(eraseButton, "d-none", false);
 
@@ -721,8 +719,8 @@ addPositionForm.addEventListener("submit", (e) => {
     const ticker = data.get("position-ticker");
 
     // Загружаем сделки по инструменту
-    window.TTApi.LoadFillsByTicker(ticker)
-        .then(_ => window.TTApi.LoadOrderbookByTicker(ticker))
+    TTApi.loadFillsByTicker(ticker)
+        .then(_ => TTApi.loadOrderbookByTicker(ticker))
         .then(_ => {
             addPositionInput.value = "";
             $('#add-position-modal').modal('hide');
@@ -769,10 +767,10 @@ const defaultOperationsFilter = operationTypes;
 let operationsFilter = JSON.parse(localStorage.getItem('operationsFilter')) || defaultOperationsFilter;
 
 $('#filter-operations-modal').on('shown.bs.modal', function () {
-    AddFilterOperationsCheckboxes();
+    addFilterOperationsCheckboxes();
 });
 
-function AddFilterOperationsCheckboxes() {
+function addFilterOperationsCheckboxes() {
     filterOperationsContainer.textContent = "";
     operationTypes.forEach(item => {
         const checkbox = document.querySelector('#filter-operations-checkbox-template').content.firstElementChild.cloneNode(true);
