@@ -2,29 +2,29 @@ const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
 // https://tinkoffcreditsystems.github.io/invest-openapi/swagger-ui/
 
-if (!window.TTApi) { window.TTApi = {}; }
-if (!window.TTApi.instruments) { window.TTApi.instruments = JSON.parse(localStorage.getItem('instruments')) || []; }
-if (!window.TTApi.operations) { window.TTApi.operations = JSON.parse(localStorage.getItem('operations')) || {}; }
-if (!window.TTApi.positions) { window.TTApi.positions = JSON.parse(localStorage.getItem('positions')) || []; }
-if (!window.TTApi.fills) { window.TTApi.fills = JSON.parse(localStorage.getItem('fills')) || {}; }
+export const TTApi = {
+    token: localStorage.getItem("token"),
 
-window.TTApi = {
-    ...window.TTApi,
-    FindPosition,
-    LoadPortfolio,
-    LoadFillsByFigi,
-    LoadInstrumentByFigi,
-    LoadFillsByTicker,
-    LoadOrderbookByTicker,
-    RemovePosition,
-    UpdateFills,
+    instruments: JSON.parse(localStorage.getItem('instruments')) || [],
+    operations: JSON.parse(localStorage.getItem('operations')) || {},
+    positions: JSON.parse(localStorage.getItem('positions')) || [],
+    fills: JSON.parse(localStorage.getItem('fills')) || {},
+
+    findPosition,
+    loadPortfolio,
+    loadFillsByFigi,
+    loadInstrumentByFigi,
+    loadFillsByTicker,
+    loadOrderbookByTicker,
+    removePosition,
+    updateFills,
+    eraseData,
     httpGet,
-    erase,
 };
 
-var TTApi = window.TTApi;
+window.TTApi = TTApi;
 
-function erase() {
+function eraseData() {
     TTApi.token = undefined;
     TTApi.operations = {};
     TTApi.positions = [];
@@ -52,10 +52,10 @@ async function httpGet(path) {
 /**
  * Загрузить доступные денежные средства
  */
-async function LoadCurrencies() {
+async function loadCurrencies() {
     const payload = await httpGet("/portfolio/currencies");
 
-    UpdateCurrencies(payload.currencies);
+    updateCurrencies(payload.currencies);
 
     return payload.currencies;
 }
@@ -63,19 +63,19 @@ async function LoadCurrencies() {
 /**
  * Загрузить позиции
  */
-async function LoadPortfolio() {
+async function loadPortfolio() {
     const payload = await httpGet("/portfolio");
 
-    UpdatePortfolio(payload.positions);
+    updatePortfolio(payload.positions);
 
-    await LoadCurrencies();
+    await loadCurrencies();
 
     CalculatePositions(TTApi.positions);
 
     // TODO: загружать стаканы только для избранных позиций, т.к. много запросов
     TTApi.positions
         .filter(_ => _.count == 0)
-        .forEach(async position => await LoadOrderbook(position));
+        .forEach(async position => await loadOrderbook(position));
 
     return TTApi.positions;
 }
@@ -84,25 +84,25 @@ async function LoadPortfolio() {
  * Загрузить сделки
  * @param {string} ticker - идентификатор
  */
-async function LoadFillsByTicker(ticker) {
+async function loadFillsByTicker(ticker) {
     let figi = TTApi.positions.find(_ => _.ticker == ticker)?.figi;
 
     if (!figi) {
-        const item = await LoadInstrumentByTicker(ticker);
+        const item = await loadInstrumentByTicker(ticker);
         if (!item) {
             throw new Error("Instrument not found");
         }
         figi = item.figi;
     }
 
-    return await LoadFillsByFigi(figi);
+    return await loadFillsByFigi(figi);
 }
 
 /**
  * Загрузить сделки
  * @param {string} figi - идентификатор
  */
-async function LoadFillsByFigi(figi) {
+async function loadFillsByFigi(figi) {
     const fromDate = encodeURIComponent('2000-01-01T00:00:00Z');
     const toDate = encodeURIComponent(new Date().toISOString());
     const path = `/operations?from=${fromDate}&to=${toDate}` + (figi != undefined ? `&figi=${figi}` : "");
@@ -114,10 +114,10 @@ async function LoadFillsByFigi(figi) {
         return TTApi.operations[figi];
     }
 
-    const position = await FindPosition(figi);
+    const position = await findPosition(figi);
 
     if (payload.operations.length > 0) {
-        UpdateFills(position, payload.operations);
+        updateFills(position, payload.operations);
     }
 
     return TTApi.fills[position.ticker];
@@ -127,7 +127,7 @@ async function LoadFillsByFigi(figi) {
  * Загрузить инструмент
  * @param {string} figi - идентификатор
  */
-async function LoadInstrumentByFigi(figi) {
+async function loadInstrumentByFigi(figi) {
     return await httpGet(`/market/search/by-figi?figi=${figi}`);
 }
 
@@ -135,7 +135,7 @@ async function LoadInstrumentByFigi(figi) {
  * Загрузить инструмент
  * @param {string} ticker - идентификатор
  */
-async function LoadInstrumentByTicker(ticker) {
+async function loadInstrumentByTicker(ticker) {
     const payload = await httpGet(`/market/search/by-ticker?ticker=${ticker}`);
     return (payload.instruments.length > 0) ? payload.instruments[0] : null;
 }
@@ -144,12 +144,12 @@ async function LoadInstrumentByTicker(ticker) {
  * Загрузить стакан
  * @param {string} position - позиция
  */
-async function LoadOrderbook(position) {
+async function loadOrderbook(position) {
     const orderbook = await httpGet(`/market/orderbook?figi=${position.figi}&depth=${1}`);
 
     position.lastPrice = orderbook.lastPrice;
     position.lastPriceUpdated = new Date();
-    UpdatePosition(position);
+    updatePosition(position);
 
     return orderbook;
 }
@@ -158,18 +158,18 @@ async function LoadOrderbook(position) {
  * Загрузить стакан
  * @param {string} ticker - идентификатор
  */
-async function LoadOrderbookByTicker(ticker) {
+async function loadOrderbookByTicker(ticker) {
     let position = TTApi.positions.find(_ => _.ticker.toLowerCase() == ticker.toLowerCase());
 
     if (!position) {
         console.log(`Position ${ticker.toUpperCase()} not found at local positions. Requesting from API`)
-        position = await LoadInstrumentByTicker(ticker);
+        position = await loadInstrumentByTicker(ticker);
         if (!position) {
             throw new Error("Instrument not found");
         }
     }
 
-    return await LoadOrderbook(position);
+    return await loadOrderbook(position);
 }
 
 // #region Positions
@@ -178,10 +178,10 @@ async function LoadOrderbookByTicker(ticker) {
  * Найти инструмент
  * @param {string} figi - идентификатор
  */
-async function FindInstrumentByFigi(figi) {
+async function findInstrumentByFigi(figi) {
     let instrument = TTApi.instruments.find(_ => _.figi == figi);
     if (!instrument) {
-        instrument = await LoadInstrumentByFigi(figi);
+        instrument = await loadInstrumentByFigi(figi);
         TTApi.instruments.push(instrument);
         localStorage.setItem('instruments', JSON.stringify(TTApi.instruments));
     }
@@ -192,11 +192,11 @@ async function FindInstrumentByFigi(figi) {
  * Найти позицию
  * @param {string} figi - идентификатор
  */
-async function FindPosition(figi) {
+async function findPosition(figi) {
     let position = TTApi.positions.find(_ => _.figi == figi);
 
     if (!position) {
-        const item = await FindInstrumentByFigi(figi);
+        const item = await findInstrumentByFigi(figi);
         position = {
             ticker: item.ticker,
             name: item.name,
@@ -212,7 +212,7 @@ async function FindPosition(figi) {
     return position;
 }
 
-function UpdateCurrencies(currencies) {
+function updateCurrencies(currencies) {
     currencies.forEach(item => {
         if (item.balance == 0) { return; }
         switch (item.currency) {
@@ -281,7 +281,7 @@ function sortPositions(positions) {
  * Обновить позиции на основе данных из API
  * @param {object} portfolio - список позиций
  */
-function UpdatePortfolio(portfolio) {
+function updatePortfolio(portfolio) {
     let created = 0;
     let updated = 0;
     const positions = TTApi.positions;
@@ -344,7 +344,7 @@ function UpdatePortfolio(portfolio) {
  * @param {number} average - средняя цена
  * @param {number} fixedPnL - зафиксированную прибыль
  */
-function UpdatePosition(position, average, fixedPnL) {
+function updatePosition(position, average, fixedPnL) {
     position.average = average || position.average;
     position.fixedPnL = fixedPnL || position.fixedPnL;
     position.expected = (position.lastPrice - position.average) * position.count;
@@ -358,14 +358,14 @@ function UpdatePosition(position, average, fixedPnL) {
 async function CalculatePositions(positions) {
     const needCalcPositions = positions.filter(_ => _.needCalc);
     console.log(`Calculating ${needCalcPositions.length} positions`);
-    needCalcPositions.forEach(async position => await LoadFillsByFigi(position.figi));
+    needCalcPositions.forEach(async position => await loadFillsByFigi(position.figi));
 }
 
 /**
  * Удалить позицию из списка позиций
  * @param {object} position - позиция
  */
-function RemovePosition(position) {
+function removePosition(position) {
     if (position.count != 0) {
         console.log(`Failed to remove non-zero position ${position.ticker}`);
         return;
@@ -390,7 +390,7 @@ function RemovePosition(position) {
  * @param {object} position - позиция
  * @param {object} operations - список операций
  */
-function UpdateFills(position, operations) {
+function updateFills(position, operations) {
     let created = 0;
     let updated = 0;
     const fills = TTApi.fills[position.ticker] || [];
@@ -425,7 +425,7 @@ function UpdateFills(position, operations) {
                 updated++;
             }
 
-            const result = ProcessOperation({
+            const result = processOperation({
                 currentQuantity,
                 totalFixedPnL,
                 averagePrice,
@@ -445,13 +445,13 @@ function UpdateFills(position, operations) {
 
     TTApi.fills[position.ticker] = fills;
 
-    UpdatePosition(position, averagePrice, totalFixedPnL);
+    updatePosition(position, averagePrice, totalFixedPnL);
 
     localStorage.setItem('fills', JSON.stringify(TTApi.fills));
     console.log(`Fills ${position.ticker} created: ${created}, updated: ${updated}`)
 }
 
-function ProcessOperation(accumulated, operation) {
+function processOperation(accumulated, operation) {
     let { currentQuantity, totalFixedPnL, averagePrice, averagePriceCorrected } = accumulated;
 
     const price = operation.price;
