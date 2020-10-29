@@ -36,31 +36,17 @@ function erase() {
  * @param {string} path - относительный адрес
  */
 async function httpGet(path) {
-    return new Promise(function (resolve, reject) {
-
-        const xhr = new XMLHttpRequest();
-        xhr.responseType = 'json';
-        xhr.timeout = 10000;
-
-        xhr.onload = function () {
-            if (this.status == 200) {
-                console.log(`GET ${path}\n`, this.response);
-                resolve(this.response.payload);
-            } else {
-                console.log(`GET ${path}\n`, this.statusText);
-                const error = new Error(this.statusText);
-                error.code = this.status;
-                reject(error);
-            }
-        };
-        xhr.onerror = function () {
-            reject(new Error("Network Error"));
-        };
-
-        xhr.open('GET', apiURL + path);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + TTApi.token);
-        xhr.send();
-    });
+    const response = await fetch(apiURL + path, { headers: { Authorization: 'Bearer ' + TTApi.token } });
+    if (response.status == 200) {
+        const data = await response.json();
+        console.log(`GET ${path}\n`, data);
+        return (data.payload);
+    } else {
+        console.log(`GET ${path}\n`, response.statusText);
+        const error = new Error(response.statusText);
+        error.code = response.status;
+        throw error;
+    }
 }
 
 /**
