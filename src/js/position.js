@@ -12,7 +12,7 @@ export class Position {
         this.lastPrice = item.expectedYield?.value / item.balance + item.averagePositionPrice?.value;
 
         this.portfolioId = portfolioId;
-        this.lastPriceUpdate = new Date();
+        this.lastPriceUpdated = new Date();
         this.needCalc = true;
     }
 }
