@@ -18,11 +18,13 @@
             <a class="nav-link" id="settings-tab" data-toggle="tab" href="#settings" role="tab" aria-controls="settings"
                 aria-selected="false">Settings</a>
         </li>
-        <li class="nav-item" role="presentation">
-            <a class="nav-link active" id="portfolio-tab" data-toggle="tab" href="#portfolio" role="tab"
-                aria-controls="portfolio" data-default="true" aria-selected="true">Portfolio</a>
-        </li>
         <template id="nav-tab-template">
+            <li class="nav-item" role="presentation">
+                <a class="nav-link" id="example-tab" data-toggle="tab" href="#example" role="tab"
+                    aria-controls="example" aria-selected="false">Example</a>
+            </li>
+        </template>
+        <template id="nav-tab-closable-template">
             <li class="nav-item d-flex position-relative" role="presentation" data-closable="true">
                 <a class="nav-link tab-text" id="example-tab" data-toggle="tab" href="#example" role="tab"
                     aria-controls="example" aria-selected="false">Example</a>
@@ -37,7 +39,7 @@
     <!--Tab Content-->
     <div class="tab-content" id="main-tab-content">
         <!--Token-->
-        <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+        <div class="tab-pane fade show active" id="settings" role="tabpanel" aria-labelledby="settings-tab">
             <h4 class="text-center mt-2 mb-3">Welcome to Tinkoff Web Terminal Extension!</h4>
             <div class="offset-3 col-6">
                 <form id="token-form" class="form-inline mb-3">
@@ -56,8 +58,8 @@
                     <div class="input-group flex-grow-1 mb-3">
                         <label class="flex-grow-1">
                             <span class="mr-2">Positions update interval (seconds):</span>
-                            <input id="updateIntervalInput" name="update-interval" placeholder="Interval" type="number" min="5"
-                                style="width: 5.75rem" class="form-control form-control-sm"></input>
+                            <input id="updateIntervalInput" name="update-interval" placeholder="Interval" type="number"
+                                min="5" style="width: 5.75rem" class="form-control form-control-sm"></input>
                         </label>
                     </div>
                     <div class="custom-control custom-checkbox">
@@ -75,73 +77,80 @@
                 </div>
             </div>
         </div>
+
         <!--Portfolio-->
-        <div class="tab-pane fade show active" id="portfolio" role="tabpanel" aria-labelledby="portfolio-tab">
-            <table id="portfolio-table" class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
-                <thead class="thead-sticky">
-                    <tr>
-                        <th>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>Asset</span>
-                                <div>
-                                    <button class="btn btn-xs btn-icon btn-dark" data-toggle="modal"
-                                        data-target="#add-position-modal">
-                                        <i class="fa fa-plus" title="Add"></i>
-                                    </button>
-                                    <button class="btn btn-xs btn-icon btn-dark d-none">
-                                        <i class="fa fa-filter" title="Filter"></i>
-                                    </button>
+        <template id="tab-pane-portfolio-template">
+            <div class="tab-pane fade" id="portfolio" role="tabpanel" aria-labelledby="portfolio-tab">
+                <table class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
+                    <thead class="thead-sticky">
+                        <tr>
+                            <th>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Asset</span>
+                                    <div>
+                                        <button class="btn btn-xs btn-icon btn-dark" data-toggle="modal"
+                                            data-target="#add-position-modal">
+                                            <i class="fa fa-plus" title="Add"></i>
+                                        </button>
+                                        <button class="btn btn-xs btn-icon btn-dark d-none">
+                                            <i class="fa fa-filter" title="Filter"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        </th>
-                        <th class="text-right">Count</th>
-                        <th class="text-right cursor-help" title="Average price">Average</th>
-                        <th class="text-right cursor-help" title="Last price">Price</th>
-                        <th class="text-right cursor-help" title="Cost = Count × Price">Cost</th>
-                        <th class="text-right cursor-help" title="Expected Profit or Loss">Expected</th>
-                        <th class="text-right cursor-help" title="Fixed Profit or Loss">
-                            <span>Fixed </span>
-                            <span class="portfolio-all-day-switch cursor-pointer" title="Switch display P&L period 'All time' or 'Today'">All</span>
-                        </th>
-                    </tr>
-                </thead>
-                <template id="portfolio-group-row-template">
-                    <tr class="group-row">
-                        <td colspan="10" class="font-italic"></td>
-                    </tr>
-                </template>
-                <template id="portfolio-asset-button-remove-template">
-                    <button class="portfolio-asset-button-remove btn btn-xs btn-icon btn-link">
-                        <i class="fa fa-trash-o" title="Remove position"></i>
-                    </button>
-                </template>
-                <template id="portfolio-row-template">
-                    <tr class="portfolio-row cursor-pointer">
-                        <td class="portfolio-asset">
-                            <div class="d-flex align-items-center">
-                                <a><div class="portfolio-logo mr-2"></div></a>
-                                <span class="flex-grow-1"></span>
-                            </div>
-                        </td>
-                        <td class="portfolio-count text-right"></td>
-                        <td class="portfolio-average text-right"></td>
-                        <td class="portfolio-last text-right"></td>
-                        <td class="portfolio-cost text-right"></td>
-                        <td class="portfolio-expected text-right">
-                            <span></span>
-                        </td>
-                        <td class="portfolio-fixed-pnl text-right">
-                            <span></span>
-                        </td>
-                    </tr>
-                </template>
-                <tbody class="positions-stock"></tbody>
-                <tbody class="positions-bond"></tbody>
-                <tbody class="positions-etf"></tbody>
-                <tbody class="positions-currency"></tbody>
-                <tbody class="positions-summary-row"></tbody>
-            </table>
-        </div>
+                            </th>
+                            <th class="text-right">Count</th>
+                            <th class="text-right cursor-help" title="Average price">Average</th>
+                            <th class="text-right cursor-help" title="Last price">Price</th>
+                            <th class="text-right cursor-help" title="Cost = Count × Price">Cost</th>
+                            <th class="text-right cursor-help" title="Expected Profit or Loss">Expected</th>
+                            <th class="text-right cursor-help" title="Fixed Profit or Loss">
+                                <span>Fixed </span>
+                                <span class="portfolio-all-day-switch cursor-pointer"
+                                    title="Switch display P&L period 'All time' or 'Today'">All</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <template id="portfolio-group-row-template">
+                        <tr class="group-row">
+                            <td colspan="10" class="font-italic"></td>
+                        </tr>
+                    </template>
+                    <template id="portfolio-asset-button-remove-template">
+                        <button class="portfolio-asset-button-remove btn btn-xs btn-icon btn-link">
+                            <i class="fa fa-trash-o" title="Remove position"></i>
+                        </button>
+                    </template>
+                    <template id="portfolio-row-template">
+                        <tr class="portfolio-row cursor-pointer">
+                            <td class="portfolio-asset">
+                                <div class="d-flex align-items-center">
+                                    <a>
+                                        <div class="portfolio-logo mr-2"></div>
+                                    </a>
+                                    <span class="flex-grow-1"></span>
+                                </div>
+                            </td>
+                            <td class="portfolio-count text-right"></td>
+                            <td class="portfolio-average text-right"></td>
+                            <td class="portfolio-last text-right"></td>
+                            <td class="portfolio-cost text-right"></td>
+                            <td class="portfolio-expected text-right">
+                                <span></span>
+                            </td>
+                            <td class="portfolio-fixed-pnl text-right">
+                                <span></span>
+                            </td>
+                        </tr>
+                    </template>
+                    <tbody class="positions-stock"></tbody>
+                    <tbody class="positions-bond"></tbody>
+                    <tbody class="positions-etf"></tbody>
+                    <tbody class="positions-currency"></tbody>
+                    <tbody class="positions-summary-row"></tbody>
+                </table>
+            </div>
+        </template>
+
         <!--Fills-->
         <template id="tab-pane-fills-template">
             <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
@@ -180,7 +189,7 @@
                 <td class="fills-fixed-pnl text-right"><span></span></td>
             </tr>
         </template>
-        
+
         <!--Money transactions-->
         <template id="tab-pane-money-template">
             <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
@@ -193,8 +202,8 @@
                             <th>
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span>Type</span>
-                                    <button class="btn btn-xs btn-icon btn-dark" 
-                                        data-toggle="modal" data-target="#filter-operations-modal">
+                                    <button class="btn btn-xs btn-icon btn-dark" data-toggle="modal"
+                                        data-target="#filter-operations-modal">
                                         <i class="fa fa-filter" title="Filter by type"></i>
                                     </button>
                                 </div>
@@ -205,7 +214,14 @@
                     <tbody class="money-summary"></tbody>
                     <tbody class="money-detailed"></tbody>
                 </table>
-                <span class="loading-content-text d-block w-100 text-center"></span>
+                <div class="loading-container d-none">
+                    <span class="d-flex justify-content-center w-100">
+                        <div class="spinner-border" role="status">
+                            <span class="sr-only"></span>
+                        </div>
+                        <label class="ml-2">Loading...</label>
+                    </span>
+                </div>
             </div>
         </template>
         <template id="money-row-template">
@@ -216,7 +232,9 @@
                 <td class="money-type"><span></span></td>
                 <td class="portfolio-asset">
                     <div class="d-flex align-items-center">
-                        <a><div class="portfolio-logo mr-2"></div></a>
+                        <a>
+                            <div class="portfolio-logo mr-2"></div>
+                        </a>
                         <span class="flex-grow-1"></span>
                     </div>
                 </td>
@@ -239,7 +257,8 @@
                     <div class="modal-body">
                         <input id="add-position-input" name="position-ticker" placeholder="Ticker"
                             class="form-control form-control-sm mb-2" required></input>
-                        <a href="https://www.tinkoff.ru/invest/catalog/" target="_blank" title="Open catalog in new tab">Don't know ticker?</a>
+                        <a href="https://www.tinkoff.ru/invest/catalog/" target="_blank"
+                            title="Open catalog in new tab">Don't know ticker?</a>
                     </div>
                     <div class="modal-footer justify-content-between">
                         <span class="status-message text-danger"></span>
@@ -273,7 +292,7 @@
                         <div class="custom-control custom-checkbox">
                             <input type="checkbox" class="custom-control-input" id="checkbox_id">
                             <label class="custom-control-label cursor-pointer" for="checkbox_id">Label</label>
-                          </div>
+                        </div>
                     </template>
                     <div class="modal-footer justify-content-between">
                         <span class="status-message text-danger"></span>
@@ -298,7 +317,6 @@
     <!--Scripts-->
     <script src="js/TTApi.js" type="module"></script>
     <script src="js/popup.js" type="module"></script>
-
 </body>
 
 </html>
