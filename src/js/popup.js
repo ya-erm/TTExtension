@@ -200,12 +200,20 @@ function fillPositionRow(portfolio, positionRow, position) {
         positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
     }
 
+    const calculatedCountNotEqualActual = position.calculatedCount && position.calculatedCount != position.count;
+    const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
+
     const cellCount = positionRow.querySelector("td.portfolio-count");
     cellCount.textContent = position.count;
+    setClassIf(cellCount, "inaccurate-value-text", calculatedCountNotEqualActual);
+    if (calculatedCountNotEqualActual) {
+        cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
+            `Actual value: ${position.count}`;
+    }
 
     const cellAverage = positionRow.querySelector("td.portfolio-average");
     cellAverage.textContent = printMoney(position.average, position.currency);
-    setClassIf(cellAverage, "inaccurate-value-text", position.needCalc);
+    setClassIf(cellAverage, "inaccurate-value-text", inaccurateValue);
 
     const cellLast = positionRow.querySelector("td.portfolio-last");
     cellLast.textContent = printMoney(position.lastPrice, position.currency);
@@ -215,12 +223,12 @@ function fillPositionRow(portfolio, positionRow, position) {
     cellCost.textContent = (position.count != 0)
         ? printMoney(position.count * position.lastPrice, position.currency)
         : "";
-    setClassIf(cellCost, "inaccurate-value-text", position.needCalc);
+    setClassIf(cellCost, "inaccurate-value-text", inaccurateValue);
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     cellExpected.textContent = printMoney(position.expected, position.currency, true);
     cellExpected.className = getMoneyColorClass(position.expected);
-    setClassIf(cellExpected, "inaccurate-value-text", position.needCalc);
+    setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
     if (portfolio.allDayPeriod == "All") {
