@@ -289,8 +289,9 @@ export class Portfolio {
         let averagePrice = 0;
         let averagePriceCorrected = 0;
 
-        operations.reverse()
+        operations
             .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
+            .sort((a,b) => new Date(a.date) - new Date(b.date))
             .forEach(item => {
                 let fill = fills.find(_ => _.id == item.id);
                 if (!fill) {
@@ -327,6 +328,11 @@ export class Portfolio {
         console.log(`Fills ${position.ticker} created: ${created}, updated: ${updated}`)
         this.fills[position.ticker] = fills;
         this.save();
+        
+        position.calculatedCount = currentQuantity;
+        if (position.count != currentQuantity) {
+            console.warn("Calculated by fills position quantity", currentQuantity, "is not equal with actual position quantity", position.count);
+        }
 
         // Обновляем позицию
         updatePosition(position, averagePrice, totalFixedPnL);
