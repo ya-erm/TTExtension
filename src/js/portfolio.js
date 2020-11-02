@@ -58,6 +58,7 @@ export class Portfolio {
      * @param {array} items - список позиций
      */
     updatePortfolio(items) {
+        const now = new Date();
         let created = 0;
         let updated = 0;
         items.forEach(item => {
@@ -75,10 +76,10 @@ export class Portfolio {
                 position.needCalc = true;
                 changed = true;
             }
+            position.lastPriceUpdated = now;
             if (position.lastPrice !== lastPrice) {
                 position.lastPrice = lastPrice;
                 position.expected = (position.lastPrice - position.average) * position.count;
-                position.lastPriceUpdated = new Date();
                 changed = true;
             }
             if (changed) {

@@ -229,8 +229,19 @@ function fillPositionRow(portfolio, positionRow, position) {
     }
 
     const cellAverage = positionRow.querySelector("td.portfolio-average");
-    cellAverage.textContent = printMoney(position.average, position.currency);
-    setClassIf(cellAverage, "inaccurate-value-text", inaccurateValue);
+    cellAverage.title = "";
+    let average = position.average;
+    if (position.count == 0) {
+        const fills = portfolio.fills[position.ticker];
+        if (fills?.length > 1) {
+            const fill = fills[fills.length - 2];
+            average = fill.averagePrice;
+            const fillDate = fill.date.toString().substring(0, 19).replace(/-/g, "/").replace("T", " ");
+            cellAverage.title = `Last trade average price (${fillDate})`;
+        }
+    }
+    cellAverage.textContent = printMoney(average, position.currency);
+    setClassIf(cellAverage, "inaccurate-value-text", inaccurateValue || position.count == 0);
 
     const cellLast = positionRow.querySelector("td.portfolio-last");
     cellLast.textContent = printMoney(position.lastPrice, position.currency);
