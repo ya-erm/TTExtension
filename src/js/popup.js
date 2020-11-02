@@ -1,4 +1,4 @@
-import { getCurrencyRate } from "./calculate.js";
+import { getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { Portfolio } from "./portfolio.js";
 import { updatePosition } from "./position.js";
 import { closeTab, createTab, findTab, openTab } from "./tabs.js";
@@ -104,6 +104,10 @@ function createPortfolioTab(portfolio) {
     const portfolioAllDaySwitch = tabPane.querySelector(".portfolio-all-day-switch");
     portfolioAllDaySwitch.addEventListener("click", () => changePortfolioAllDay(portfolio));
     portfolioAllDaySwitch.textContent = portfolio.allDayPeriod;
+
+    // Переключатель единицы измерения изменения цены за день (проценты, абсолютное значение)
+    const priceChangeUnitSwitch = tabPane.querySelector(".price-change-unit-switch");
+    priceChangeUnitSwitch.addEventListener("click", () => changePriceChangeUnit(portfolio));
 }
 
 // Обработчик события обновления позиции
@@ -164,6 +168,7 @@ function addPositionRow(portfolio, position) {
     cellAsset.querySelector("span").textContent = position.instrumentType === "Stock"
         ? position.ticker + ' - ' + position.name
         : position.name;
+    cellAsset.querySelector("span").title = cellAsset.querySelector("span").textContent;
     cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
 
     fillPositionRow(portfolio, positionRow, position);
@@ -202,6 +207,18 @@ function fillPositionRow(portfolio, positionRow, position) {
 
     const calculatedCountNotEqualActual = position.calculatedCount && position.calculatedCount != position.count;
     const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
+
+    // TODO: выполнять асинхронные запросы в методе отрисовки UI - плохая идея
+    const cellChange = positionRow.querySelector("td.portfolio-change span");
+    (position.figi != "RUB") && getPreviousDayClosePrice(position.figi).then(previousDayPrice => {
+        const change = portfolio.priceChangeUnit == "Percents"
+            ? 100 * position.lastPrice / previousDayPrice - 100
+            : position.lastPrice - previousDayPrice;
+        const unit = portfolio.priceChangeUnit == "Percents" ? "%" : position.currency;
+        cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
+        cellChange.textContent = printMoney(change, unit, true);
+        cellChange.className = getMoneyColorClass(change);
+    });
 
     const cellCount = positionRow.querySelector("td.portfolio-count");
     cellCount.textContent = position.count;
@@ -645,9 +662,17 @@ function changePortfolioAllDay(portfolio) {
     portfolio.allDayPeriod = (portfolio.allDayPeriod == "All") ? "Day" : "All";
     const portfolioAllDaySwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-all-day-switch`);
     portfolioAllDaySwitch.textContent = portfolio.allDayPeriod;
-    TTApi.savePortfolios();
     portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
     addPositionSummaryRow(portfolio);
+    TTApi.savePortfolios();
+}
+
+// Изменить единицы измерения изменения цены: проценты или абсолютное значение
+function changePriceChangeUnit(portfolio) {
+    portfolio.priceChangeUnit = (portfolio.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
+    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
+    addPositionSummaryRow(portfolio);
+    TTApi.savePortfolios();
 }
 
 // #endregion

@@ -26,6 +26,40 @@ export function getCurrencyRate(from, to) {
 }
 
 /**
+ * Получить цену закрытия за предыдущий торговый день
+ * @param {string} figi - идентификатор инструмента
+ * @param {Date} date - текущая дата
+ */
+export async function getPreviousDayClosePrice(figi, date = undefined) {
+    const now = date ?? new Date();
+    const previousTradingDay = new Date(now.getTime());
+    previousTradingDay.setUTCHours(15);
+    previousTradingDay.setUTCMinutes(0);
+    previousTradingDay.setUTCSeconds(0);
+    previousTradingDay.setUTCMilliseconds(0);
+    if (now.getUTCDay() <= 1) { // 0 = Вс, 1 = Пн
+        previousTradingDay.setUTCDate(previousTradingDay.getUTCDate() - 2 - now.getUTCDay());
+    } else {
+        previousTradingDay.setUTCDate(previousTradingDay.getUTCDate() - 1);
+    }
+    let attempts = 0;
+    while (attempts < 3) {
+        const toDate = new Date(previousTradingDay.getTime() + 8 * 60 * 60000); // Add 7 hours
+        const candles = await TTApi.loadCandles(figi, previousTradingDay, toDate, "hour");
+        if (candles.length > 0) {
+            const lastCandle = candles[candles.length - 1];
+            return lastCandle.c; // close price
+        } else {
+            // Возможно этот день был выходным, попробуем за предыдущий
+            previousTradingDay.setUTCDate(previousTradingDay.getUTCDate() - 1);
+            attempts++;
+        }
+    }
+}
+
+window.getPreviousDayClosePrice = getPreviousDayClosePrice;
+
+/**
  * Функция просчёта операций
  * @param {object} accumulated Накопленный результат
  * @param {object} operation Операция
