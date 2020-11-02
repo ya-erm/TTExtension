@@ -11,7 +11,8 @@ export class Portfolio {
         this.positions = [];
         this.fills = {};
         this.operations = {};
-        this.allDayPeriod = "All";
+        this.allDayPeriod = "All"; // All | Day
+        this.priceChangeUnit = "Percents"; // Percents | Absolute
     }
 
     /**

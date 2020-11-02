@@ -21,6 +21,7 @@ export const TTApi = {
     loadInstrumentByFigi,
     loadInstrumentByTicker,
     loadOperationsByFigi,
+    loadCandles,
     loadOrderbook,
     loadOrderbookByTicker,
     getCurrencyRate,
@@ -129,6 +130,20 @@ async function loadInstrumentByTicker(ticker) {
         return instrument;
     }
     return null;
+}
+
+/**
+ * Загрузить свечи
+ * @param {string} figi - идентификатор
+ * @param {Date} from 
+ * @param {data} to 
+ * @param {string} interval - интервал 1min, 2min, 3min, 5min, 10min, 15min, 30min, hour, day, week, month
+ */
+async function loadCandles(figi, from, to, interval) {
+    const fromDate = encodeURIComponent(from.toISOString());
+    const toDate = encodeURIComponent(to.toISOString());
+    const payload = await httpGet(`/market/candles?figi=${figi}&from=${fromDate}&to=${toDate}&interval=${interval}`);
+    return payload.candles;
 }
 
 /**
