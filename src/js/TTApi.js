@@ -21,6 +21,7 @@ export const TTApi = {
     loadInstrumentByFigi,
     loadInstrumentByTicker,
     loadOperationsByFigi,
+    findCandles,
     loadCandles,
     loadOrderbook,
     loadOrderbookByTicker,
@@ -136,13 +137,14 @@ async function loadInstrumentByTicker(ticker) {
  * Загрузить свечи
  * @param {string} figi - идентификатор
  * @param {Date} from 
- * @param {data} to 
+ * @param {Date} to 
  * @param {string} interval - интервал 1min, 2min, 3min, 5min, 10min, 15min, 30min, hour, day, week, month
  */
 async function loadCandles(figi, from, to, interval) {
     const fromDate = encodeURIComponent(from.toISOString());
     const toDate = encodeURIComponent(to.toISOString());
     const payload = await httpGet(`/market/candles?figi=${figi}&from=${fromDate}&to=${toDate}&interval=${interval}`);
+    await saveCandles(figi, payload.candles);
     return payload.candles;
 }
 
@@ -186,7 +188,43 @@ async function findInstrumentByFigi(figi) {
  * @param {object} instrument - инструмент
  */
 function saveInstrument(instrument) {
-    TTApi.instruments.push(instrument);
+    if (TTApi.instruments.find(item => item.figi == instrument.figi) == undefined) {
+        TTApi.instruments.push(instrument);
+        localStorage.setItem('instruments', JSON.stringify(TTApi.instruments));
+    }
+}
+
+/**
+ * Найти свечи в кэше
+ * @param {string} figi - идентификатор
+ * @param {Date} from 
+ * @param {Date} to 
+ * @param {string} interval 
+ */
+function findCandles(figi, from, to, interval) {
+    const instrument = TTApi.instruments.find(item => item.figi == figi);
+    if (instrument?.candles == undefined || instrument.candles[interval] == undefined) {
+        return [];
+    }
+    return instrument.candles[interval].filter(candle => from <= new Date(candle.time) && new Date(candle.time) <= to);
+}
+
+/**
+ * Сохранить информацию о свечах
+ * @param {string} figi - идентификатор
+ * @param {array} candles - свечи
+ */
+async function saveCandles(figi, candles) {
+    if (candles.length == 0) { return; }
+    const instrument = await findInstrumentByFigi(figi);
+    const interval = candles[0].interval;
+    if (instrument.candles == undefined) {
+        instrument.candles = {};
+    }
+    if (instrument.candles[interval] == undefined) {
+        instrument.candles[interval] = [];
+    }
+    instrument.candles[interval].push(...candles);
     localStorage.setItem('instruments', JSON.stringify(TTApi.instruments));
 }
 
