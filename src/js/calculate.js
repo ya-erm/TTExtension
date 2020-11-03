@@ -42,18 +42,11 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     } else {
         previousTradingDay.setUTCDate(previousTradingDay.getUTCDate() - 1);
     }
-    let attempts = 0;
-    while (attempts < 3) {
-        const toDate = new Date(previousTradingDay.getTime() + 8 * 60 * 60000); // Add 7 hours
-        const candles = await TTApi.loadCandles(figi, previousTradingDay, toDate, "hour");
-        if (candles.length > 0) {
-            const lastCandle = candles[candles.length - 1];
-            return lastCandle.c; // close price
-        } else {
-            // Возможно этот день был выходным, попробуем за предыдущий
-            previousTradingDay.setUTCDate(previousTradingDay.getUTCDate() - 1);
-            attempts++;
-        }
+    const toDate = new Date(previousTradingDay.getTime() + 8 * 60 * 60000); // Add 8 hours
+    const candles = await TTApi.loadCandles(figi, previousTradingDay, toDate, "hour");
+    if (candles.length > 0) {
+        const lastCandle = candles[candles.length - 1];
+        return lastCandle.c; // close price
     }
 }
 
