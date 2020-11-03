@@ -440,7 +440,7 @@ function drawPriceChange(portfolio, position, previousDayPrice) {
     let change = portfolio.priceChangeUnit == "Percents"
         ? 100 * position.lastPrice / previousDayPrice - 100
         : position.lastPrice - previousDayPrice;
-    if (change < 0.01) { change = 0; }
+    if (Math.abs(change) < 0.01) { change = 0; }
     const unit = portfolio.priceChangeUnit == "Percents" ? "%" : position.currency;
     cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
     cellChange.textContent = printMoney(change, unit, true);
