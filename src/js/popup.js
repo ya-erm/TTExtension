@@ -132,6 +132,7 @@ async function loadPortfolio() {
     if (portfolio != undefined) {
         const positions = await portfolio.loadPositions();
         positions.forEach(position => addOrUpdatePosition(portfolio, position));
+        loadPriceChange(portfolio);
     }
 }
 
@@ -146,7 +147,7 @@ function loopLoadPortfolio() {
 
 // Добавить или обновить строку позиции
 function addOrUpdatePosition(portfolio, position) {
-    var positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
+    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
     if (!positionRow) {
         addPositionRow(portfolio, position);
     } else {
@@ -207,18 +208,6 @@ function fillPositionRow(portfolio, positionRow, position) {
 
     const calculatedCountNotEqualActual = position.calculatedCount && position.calculatedCount != position.count;
     const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
-
-    // TODO: выполнять асинхронные запросы в методе отрисовки UI - плохая идея
-    const cellChange = positionRow.querySelector("td.portfolio-change span");
-    (position.figi != "RUB") && getPreviousDayClosePrice(position.figi).then(previousDayPrice => {
-        const change = portfolio.priceChangeUnit == "Percents"
-            ? 100 * position.lastPrice / previousDayPrice - 100
-            : position.lastPrice - previousDayPrice;
-        const unit = portfolio.priceChangeUnit == "Percents" ? "%" : position.currency;
-        cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
-        cellChange.textContent = printMoney(change, unit, true);
-        cellChange.className = getMoneyColorClass(change);
-    });
 
     const cellCount = positionRow.querySelector("td.portfolio-count");
     cellCount.textContent = position.count;
@@ -430,6 +419,32 @@ function onOperationsLinkClick() {
 // Обработчик нажатия на кнопку удаления позиции
 function onPositionRemoveClick(portfolio, position) {
     portfolio.removePosition(position);
+}
+
+// Получить изменение цены за день
+function loadPriceChange(portfolio) {
+    portfolio.positions.forEach(position => {
+        addOrUpdatePosition(portfolio, position);
+        if (position.figi != "RUB") {
+            getPreviousDayClosePrice(position.figi) // TODO: добавить кэширование и троттлинг
+                .then(previousDayPrice => drawPriceChange(portfolio, position, previousDayPrice));
+        }
+    });
+}
+
+// Отрисовка изменения цены актива
+function drawPriceChange(portfolio, position, previousDayPrice) {
+    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
+    const cellChange = positionRow.querySelector("td.portfolio-change span");
+
+    let change = portfolio.priceChangeUnit == "Percents"
+        ? 100 * position.lastPrice / previousDayPrice - 100
+        : position.lastPrice - previousDayPrice;
+    if (change < 0.01) { change = 0; }
+    const unit = portfolio.priceChangeUnit == "Percents" ? "%" : position.currency;
+    cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
+    cellChange.textContent = printMoney(change, unit, true);
+    cellChange.className = getMoneyColorClass(change);
 }
 
 // #endregion
@@ -681,8 +696,7 @@ function changePortfolioAllDay(portfolio) {
 // Изменить единицы измерения изменения цены: проценты или абсолютное значение
 function changePriceChangeUnit(portfolio) {
     portfolio.priceChangeUnit = (portfolio.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
-    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
-    addPositionSummaryRow(portfolio);
+    loadPriceChange(portfolio);
     TTApi.savePortfolios();
 }
 
