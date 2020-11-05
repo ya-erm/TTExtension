@@ -1,76 +1,139 @@
-if (!window.TTApi) { window.TTApi = {}; }
+import { getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
+import { Portfolio } from "./portfolio.js";
+import { updatePosition } from "./position.js";
+import { closeTab, createTab, findTab, openTab } from "./tabs.js";
+import { TTApi } from "./TTApi.js";
+import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, setClassIf } from "./utils.js";
 
-const eraseButton = document.getElementById("erase-button");
-eraseButton.addEventListener("click", () => {
-    // Очищаем хранилище и страницу
-    localStorage.clear();
-    document.getElementById("token-input").value = "";
-    $("#portfolio-table tbody").children().remove();
-    $(".nav-item[data-closable='true']").remove();
-    document.querySelector(".portfolio-total-cost").innerHTML = "";
-    window.TTApi.erase();
-    // Скрываем кнопку очистки хранилища
-    setClassIf(eraseButton, "d-none", true);
-});
+let selectedPortfolio = localStorage.getItem("selectedPortfolio");
 
-// Загружаем токен из localStorage
-const token = localStorage["token"];
-let updateIntervalTimeout = localStorage["positionsUpdateIntervalInput"] || 60 * 1000;
-let positionsUpdateTimerId;
+async function main() {
+    if (!!TTApi.token) {
+        document.getElementById("token-input").value = TTApi.token;
 
-// Переключатель периода отображения прибыли
-const portfolioAllDaySwitch = document.querySelector(".portfolio-all-day-switch");
-portfolioAllDaySwitch.addEventListener("click", ChangePortfolioAllDay);
-let portfolioAllDayPeriod = localStorage["portfolioAllDaySwitch"] || "All";
-portfolioAllDaySwitch.textContent = portfolioAllDayPeriod;
+        await TTApi.getCurrencyRate("USD");
 
-// Изменить период отображаемой прибыли: за всё время или за торговый день
-function ChangePortfolioAllDay() {
-    portfolioAllDayPeriod = (portfolioAllDayPeriod == "All") ? "Day" : "All";
-    portfolioAllDaySwitch.textContent = portfolioAllDayPeriod;
-    localStorage["portfolioAllDaySwitch"] = portfolioAllDayPeriod;
-    window.TTApi.positions.forEach(position => AddOrUpdatePosition(position));
-    AddPositionSummaryRow(window.TTApi.positions);
+        // Создаём вкладки для каждого портфеля
+        TTApi.portfolios.forEach(portfolio => {
+            createPortfolioTab(portfolio);
+            // Отображаем позиции из памяти для выбранного портфеля
+            if (portfolio.id == selectedPortfolio) {
+                drawCachedPositions(portfolio);
+                openTab(`portfolio-${portfolio.id}`);
+                selectPortfolio(portfolio);
+            }
+        });
+
+        // Запрашиваем список счетов
+        const accounts = await TTApi.loadAccounts();
+        // Создаём портфель для каждого счёта, если он ещё не существует
+        accounts.forEach(account => {
+            if (!TTApi.portfolios.find(_ => _.account == account.brokerAccountId)) {
+                const title = account.brokerAccountType == "Tinkoff" ? "Основной" : "ИИС";
+                const id = account.brokerAccountType == "Tinkoff" ? "main" : "iia";
+                const portfolio = new Portfolio(title, id);
+                portfolio.account = account.brokerAccountId;
+                TTApi.portfolios.push(portfolio);
+                TTApi.savePortfolios();
+
+                createPortfolioTab(portfolio);
+            }
+        });
+
+        // Если нет выбранного портфеля, открываем вкладку первого портфеля
+        if (selectedPortfolio == undefined && TTApi.portfolios.length > 0) {
+            const portfolio = TTApi.portfolios[0];
+            openTab(`portfolio-${portfolio.id}`);
+            selectPortfolio(portfolio);
+        }
+
+        // Загружаем новые позиции и обновляем таблицу
+        loopLoadPortfolio();
+    } else {
+        // Открываем вкладку настроек    
+        openTab("settings");
+        // Скрываем кнопку очистки хранилища
+        setClassIf(eraseButton, "d-none", true);
+    }
 }
 
-if (token) {
-    window.TTApi.token = token;
-    document.getElementById("token-input").value = token;
-
-    // Отображаем позиции из памяти
-    window.TTApi.positions.forEach(position => AddPositionRow(position))
-    AddPositionSummaryRow(window.TTApi.positions);
-
-    // Загружаем новые позиции и обновляем таблицу
-    loopLoadPortfolio();
-
-} else {
-    // Открываем вкладку настроек
-    $("#settings-tab").tab("show");
-    // Скрываем кнопку очистки хранилища
-    setClassIf(eraseButton, "d-none", true);
-}
+main();
 
 // #region Positions
+
+/**
+ * Выбрать портфель
+ * @param {object} portfolio портфель
+ */
+function selectPortfolio(portfolio) {
+    findTab(`portfolio-${selectedPortfolio}`)?.setAttribute("data-default", "false");
+    selectedPortfolio = portfolio.id;
+    localStorage.setItem("selectedPortfolio", selectedPortfolio);
+    findTab(`portfolio-${portfolio.id}`)?.setAttribute("data-default", "true");
+}
+
+/**
+ * Отобразить позиции из памяти
+ * @param {object} portfolio портфель
+ */
+function drawCachedPositions(portfolio) {
+    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position))
+    addPositionSummaryRow(portfolio);
+}
+
+/**
+ * Создать вкладку портфеля
+ * @param {object} portfolio Портфель
+ */
+function createPortfolioTab(portfolio) {
+    const tabId = `portfolio-${portfolio.id}`;
+    if (findTab(tabId)) {
+        console.log(`Failed to create tab. Tab with id ${tabId} already exists`);
+        return;
+    }
+    const { tab, tabPane } = createTab("nav-tab-template", "tab-pane-portfolio-template", portfolio.title, tabId);
+    tab.addEventListener("click", () => {
+        selectPortfolio(portfolio);
+
+        drawCachedPositions(portfolio);
+        loopLoadPortfolio();
+    });
+    tabPane.querySelector("table").id = `portfolio-${portfolio.id}-table`;
+
+    // Переключатель периода отображения прибыли (за день, за всё время)
+    const portfolioAllDaySwitch = tabPane.querySelector(".portfolio-all-day-switch");
+    portfolioAllDaySwitch.addEventListener("click", () => changePortfolioAllDay(portfolio));
+    portfolioAllDaySwitch.textContent = portfolio.allDayPeriod;
+
+    // Переключатель единицы измерения изменения цены за день (проценты, абсолютное значение)
+    const priceChangeUnitSwitch = tabPane.querySelector(".price-change-unit-switch");
+    priceChangeUnitSwitch.addEventListener("click", () => changePriceChangeUnit(portfolio));
+}
 
 // Обработчик события обновления позиции
 window.addEventListener("PositionUpdated", function (event) {
     const { position } = event.detail;
-    AddOrUpdatePosition(position);
-    AddPositionSummaryRow(window.TTApi.positions);
+    const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
+    addOrUpdatePosition(portfolio, position);
+    addPositionSummaryRow(portfolio);
 });
 
 // Обработчик события удаления позиции
 window.addEventListener("PositionRemoved", function (event) {
     const { position } = event.detail;
-    document.querySelector(`#position-${position.figi}`)?.remove();
-    AddPositionSummaryRow(window.TTApi.positions);
+    const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
+    document.querySelector(`#portfolio-${portfolio.id}_position-${position.figi}`)?.remove();
+    addPositionSummaryRow(portfolio);
 });
 
 // Загрузка портфеля
-function loadPortfolio() {
-    window.TTApi.LoadPortfolio()
-        .then(positions => positions.forEach(position => AddOrUpdatePosition(position)));
+async function loadPortfolio() {
+    const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio);
+    if (portfolio != undefined) {
+        const positions = await portfolio.loadPositions();
+        positions.forEach(position => addOrUpdatePosition(portfolio, position));
+        loadPriceChange(portfolio);
+    }
 }
 
 // Циклическая загрузка портфеля
@@ -82,12 +145,13 @@ function loopLoadPortfolio() {
     positionsUpdateTimerId = setInterval(loadPortfolio, updateIntervalTimeout);
 }
 
-function AddOrUpdatePosition(position) {
-    var positionRow = document.getElementById(`position-${position.figi}`);
+// Добавить или обновить строку позиции
+function addOrUpdatePosition(portfolio, position) {
+    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
     if (!positionRow) {
-        AddPositionRow(position);
+        addPositionRow(portfolio, position);
     } else {
-        FillPositionRow(positionRow, position);
+        fillPositionRow(portfolio, positionRow, position);
     }
 }
 
@@ -95,9 +159,9 @@ function AddOrUpdatePosition(position) {
   * Создать новую строку в таблице позиций
   * @param {object} position - позиция
   */
-function AddPositionRow(position) {
+function addPositionRow(portfolio, position) {
     const positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
-    positionRow.id = `position-${position.figi}`;
+    positionRow.id = `portfolio-${portfolio.id}_position-${position.figi}`;
 
     const cellAsset = positionRow.querySelector("td.portfolio-asset");
     cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + position.instrumentType.toLowerCase() + "s/" + position.ticker;
@@ -105,11 +169,12 @@ function AddPositionRow(position) {
     cellAsset.querySelector("span").textContent = position.instrumentType === "Stock"
         ? position.ticker + ' - ' + position.name
         : position.name;
+    cellAsset.querySelector("span").title = cellAsset.querySelector("span").textContent;
     cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
 
-    FillPositionRow(positionRow, position);
+    fillPositionRow(portfolio, positionRow, position);
 
-    const tbody = document.querySelector(`#portfolio-table tbody.positions-${position.instrumentType.toLowerCase()}`);
+    const tbody = document.querySelector(`#portfolio-${portfolio.id}-table tbody.positions-${position.instrumentType.toLowerCase()}`);
     if (!tbody.querySelector(".group-row")) {
         const groupRow = document.querySelector('#portfolio-group-row-template').content.firstElementChild.cloneNode(true);
         groupRow.querySelector("td").textContent = mapInstrumentType(position.instrumentType);
@@ -117,22 +182,23 @@ function AddPositionRow(position) {
     }
     tbody.appendChild(positionRow);
 
-    positionRow.addEventListener("click", () => OnPositionClick(position));
+    positionRow.addEventListener("click", () => onPositionClick(portfolio, position));
 }
 
 /**
   * Заполнить строку в таблице позиций данными
+  * @param {object} portfolio - портфель
   * @param {object} positionRow - строка таблицы
   * @param {object} position - позиция
   */
-function FillPositionRow(positionRow, position) {
+function fillPositionRow(portfolio, positionRow, position) {
     if (position.count == 0) {
         if (!positionRow.querySelector(".portfolio-asset-button-remove")) {
             const buttonRemove = document.querySelector("#portfolio-asset-button-remove-template").content.firstElementChild.cloneNode(true);
             buttonRemove.addEventListener("click", (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                OnPositionRemoveClick(position);
+                onPositionRemoveClick(portfolio, position);
             });
             positionRow.querySelector(".portfolio-asset div").appendChild(buttonRemove);
         }
@@ -140,12 +206,31 @@ function FillPositionRow(positionRow, position) {
         positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
     }
 
+    const calculatedCountNotEqualActual = position.calculatedCount && position.calculatedCount != position.count;
+    const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
+
     const cellCount = positionRow.querySelector("td.portfolio-count");
     cellCount.textContent = position.count;
+    setClassIf(cellCount, "inaccurate-value-text", calculatedCountNotEqualActual);
+    if (calculatedCountNotEqualActual) {
+        cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
+            `Actual value: ${position.count}`;
+    }
 
     const cellAverage = positionRow.querySelector("td.portfolio-average");
-    cellAverage.textContent = printMoney(position.average, position.currency);
-    setClassIf(cellAverage, "inaccurate-value-text", position.needCalc);
+    cellAverage.title = "";
+    let average = position.average;
+    if (position.count == 0) {
+        const fills = portfolio.fills[position.ticker];
+        if (fills?.length > 1) {
+            const fill = fills[fills.length - 2];
+            average = fill.averagePrice;
+            const fillDate = fill.date.toString().substring(0, 19).replace(/-/g, "/").replace("T", " ");
+            cellAverage.title = `Last trade average price (${fillDate})`;
+        }
+    }
+    cellAverage.textContent = printMoney(average, position.currency);
+    setClassIf(cellAverage, "inaccurate-value-text", inaccurateValue || position.count == 0);
 
     const cellLast = positionRow.querySelector("td.portfolio-last");
     cellLast.textContent = printMoney(position.lastPrice, position.currency);
@@ -155,28 +240,28 @@ function FillPositionRow(positionRow, position) {
     cellCost.textContent = (position.count != 0)
         ? printMoney(position.count * position.lastPrice, position.currency)
         : "";
-    setClassIf(cellCost, "inaccurate-value-text", position.needCalc);
+    setClassIf(cellCost, "inaccurate-value-text", inaccurateValue);
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     cellExpected.textContent = printMoney(position.expected, position.currency, true);
     cellExpected.className = getMoneyColorClass(position.expected);
-    setClassIf(cellExpected, "inaccurate-value-text", position.needCalc);
+    setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
-    if (portfolioAllDayPeriod == "All") {
+    if (portfolio.allDayPeriod == "All") {
         cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
     } else {
-        const fixedPnLToday = GetTodayFixedPnL(position);
+        const fixedPnLToday = getTodayFixedPnL(portfolio, position);
         cellFixedPnL.textContent = printMoney(fixedPnLToday, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(fixedPnLToday);
     }
 }
 
 // Рассчитать зафиксированную прибыль за торговый день
-function GetTodayFixedPnL(position) {
+function getTodayFixedPnL(portfolio, position) {
     const now = new Date();
-    const fills = window.TTApi.fills[position.ticker] || [];
+    const fills = portfolio.fills[position.ticker] || [];
     const fillsToday = fills.filter(fill => {
         if (fill.fixedPnL == undefined) { return false; }
         const fillDate = new Date(fill.date);
@@ -190,43 +275,20 @@ function GetTodayFixedPnL(position) {
     return fixedPnLToday != 0 ? fixedPnLToday : undefined;
 }
 
-/**
-  * Получить курс валюты
-  * @param {string} from - из какой валюты
-  * @param {string} to - в какую валюту
-  */
-function GetCurrencyRate(from, to) {
-    if (from == to) { return 1.0 }
-
-    const usdToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HGFT4")?.lastPrice; // Доллар США
-    if (from == "USD" && to == "RUB") {
-        return usdToRub;
-    } else if (from == "RUB" && to == "USD") {
-        return 1.0 / usdToRub;
-    }
-
-    const eurToRub = window.TTApi.positions.find(_ => _.figi == "BBG0013HJJ31")?.lastPrice; // Евро
-    if (from == "EUR" && to == "RUB") {
-        return eurToRub;
-    } else if (from == "RUB" && to == "EUR") {
-        return 1.0 / eurToRub;
-    }
-}
-
 // Добавить итоговую строку по позициям
-function AddPositionSummaryRow(positions) {
-    let positionRow = document.getElementById("position-summary");
+function addPositionSummaryRow(portfolio) {
+    let positionRow = document.getElementById(`portfolio-${portfolio.id}_position-summary`);
     if (positionRow) { positionRow.remove(); }
 
     positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
-    positionRow.id = "position-summary";
+    positionRow.id = `portfolio-${portfolio.id}_position-summary`;
 
     setClassIf(positionRow, "cursor-pointer", false);
 
-    const total = positions.reduce((result, position) => {
+    const total = portfolio.positions.reduce((result, position) => {
         result.cost[position.currency] = (position.count || 0) * (position.average || 0) + (position.expected || 0) + (result.cost[position.currency] || 0);
         result.expected[position.currency] = (position.expected || 0) + (result.expected[position.currency] || 0);
-        const fixedPnL = (portfolioAllDayPeriod == "All") ? position.fixedPnL : GetTodayFixedPnL(position);
+        const fixedPnL = (portfolio.allDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(portfolio, position);
         result.fixedPnL[position.currency] = (fixedPnL || 0) + (result.fixedPnL[position.currency] || 0);
         return result;
     }, { cost: {}, expected: {}, fixedPnL: {} });
@@ -236,19 +298,19 @@ function AddPositionSummaryRow(positions) {
     let totalCostTitle = "Portfolio cost now \n";
     const totalCost = Object.keys(total.expected).reduce((result, key) => {
         totalCostTitle += `${key}: ${printMoney(total.cost[key], key)}\n`;
-        return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.cost[key];
+        return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.cost[key];
     }, 0);
 
     let totalExpectedTitle = "Total expected \n";
     const totalExpected = Object.keys(total.expected).reduce((result, key) => {
         totalExpectedTitle += `${key}: ${printMoney(total.expected[key], key)}\n`;
-        return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.expected[key];
+        return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
 
-    let totalFixedPnLTitle = (portfolioAllDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
+    let totalFixedPnLTitle = (portfolio.allDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
         totalFixedPnLTitle += `${key}: ${printMoney(total.fixedPnL[key], key)}\n`;
-        return result + (key == selectedCurrency ? 1.0 : GetCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
+        return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
     }, 0);
 
     const cellCost = positionRow.querySelector("td.portfolio-cost");
@@ -258,30 +320,33 @@ function AddPositionSummaryRow(positions) {
     cellExpected.textContent = printMoney(totalExpected, selectedCurrency, true);
     cellExpected.className = getMoneyColorClass(totalExpected);
     cellExpected.title = totalExpectedTitle;
-    cellExpected.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    cellExpected.addEventListener('click', _ => changeSelectedCurrency(portfolio, selectedCurrency));
     setClassIf(cellExpected, "cursor-pointer", true);
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
     cellFixedPnL.textContent = printMoney(totalFixedPnL, selectedCurrency, true);
     cellFixedPnL.className = getMoneyColorClass(totalFixedPnL);
     cellFixedPnL.title = totalFixedPnLTitle;
-    cellFixedPnL.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    cellFixedPnL.addEventListener('click', _ => changeSelectedCurrency(portfolio, selectedCurrency));
     setClassIf(cellFixedPnL, "cursor-pointer", true);
 
     const assetCell = positionRow.querySelector("td.portfolio-asset");
     assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
-    assetCell.addEventListener("click", OnOperationsLinkClick);
+    assetCell.addEventListener("click", onOperationsLinkClick);
 
-    const tbody = document.querySelector("#portfolio-table tbody.positions-summary-row");
+    const tbody = document.querySelector(`#portfolio-${portfolio.id}-table tbody.positions-summary-row`);
     tbody.appendChild(positionRow);
 
-    const totalCostSpan = document.querySelector(".portfolio-total-cost");
+    const totalCostSpanPrev = document.querySelector(".portfolio-total-cost");
+    const totalCostSpan = totalCostSpanPrev.cloneNode(true);
+    totalCostSpanPrev.parentNode.replaceChild(totalCostSpan, totalCostSpanPrev);
     const oldTotalCost = parseFloat(totalCostSpan.innerHTML.replace(/ /g, ''));
     totalCostSpan.innerHTML = printMoney(totalCost, selectedCurrency);
     totalCostSpan.title = totalCostTitle;
-    totalCostSpan.addEventListener('click', _ => ChangeSelectedCurrency(selectedCurrency));
+    totalCostSpan.addEventListener('click', _ => changeSelectedCurrency(portfolio, selectedCurrency));
 
     if (oldTotalCost && Math.abs(totalCost - oldTotalCost) > 0.01) {
+        console.log('Portfolio changed:', 'oldTotalCost', oldTotalCost, 'totalCost', parseFloat(totalCost.toFixed(2)));
         const totalCostChange = totalCost - oldTotalCost;
         const totalCostChangeSpan = document.querySelector(".portfolio-total-cost-change");
         totalCostChangeSpan.innerHTML = printMoney(totalCostChange, selectedCurrency, true);
@@ -293,81 +358,102 @@ function AddPositionSummaryRow(positions) {
 }
 
 // Изменить выбранную для отображения итоговой суммы валюту
-function ChangeSelectedCurrency(selectedCurrency) {
+function changeSelectedCurrency(portfolio, selectedCurrency) {
     if (selectedCurrency == "RUB") {
         selectedCurrency = "USD";
     } else {
         selectedCurrency = "RUB";
     }
     localStorage.setItem("selectedCurrency", selectedCurrency);
-    AddPositionSummaryRow(window.TTApi.positions);
+    addPositionSummaryRow(portfolio);
 };
 
 // Обработчик нажатия на строку в таблице позиций
-function OnPositionClick(position) {
+function onPositionClick(portfolio, position) {
     const ticker = position.ticker;
-    const mainNav = document.querySelector("#main-nav");
+    const tabId = `portfolio-${portfolio.id}_${convertToSlug(ticker)}`;
     // Если вкладка не существует
-    if (!mainNav.querySelector(`#${convertToSlug(ticker)}-tab`)) {
+    if (!findTab(tabId)) {
         // Создаём и добавляем вкладку
-        const mainTabContent = document.querySelector("#main-tab-content");
-        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-fills-template", ticker, convertToSlug(ticker));
-        mainNav.appendChild(tab);
-        mainTabContent.appendChild(tabPane);
+        const { tab, tabPane } = createTab("nav-tab-closable-template", "tab-pane-fills-template", ticker, tabId);
 
-        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(convertToSlug(ticker)));
+        tab.querySelector(".tab-close-button").addEventListener('click', () => closeTab(tabId));
 
         // Отображаем сделки из памяти
-        if (window.TTApi.fills[position.ticker]) {
-            DrawOperations(position, window.TTApi.fills[position.ticker]);
+        if (portfolio.fills[position.ticker]) {
+            drawOperations(portfolio, position, portfolio.fills[position.ticker]);
         }
 
         // Загружаем новые сделки и обновляем таблицу
-        window.TTApi.LoadFillsByFigi(position.figi)
-            .then((fills) => DrawOperations(position, fills));
+        portfolio.loadFillsByTicker(position.ticker)
+            .then((fills) => drawOperations(portfolio, position, fills));
     }
     // Открываем вкладку
-    $(`#${convertToSlug(ticker)}-tab`).tab('show');
+    openTab(tabId);
 }
 
 // Обработчик нажатия на ссылку операций
-function OnOperationsLinkClick() {
-    const ticker = "Operations";
-    const mainNav = document.querySelector("#main-nav");
+function onOperationsLinkClick() {
+    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    const tabId = `portfolio-${portfolio.id}_operations`;
     // Если вкладка не существует
-    if (!mainNav.querySelector(`#${ticker}-tab`)) {
+    if (!findTab(tabId)) {
         // Создаём и добавляем вкладку
-        const mainTabContent = document.querySelector("#main-tab-content");
-        const { tab, tabPane } = CreateTab("nav-tab-template", "tab-pane-money-template", ticker, ticker);
-        mainNav.appendChild(tab);
-        mainTabContent.appendChild(tabPane);
+        const { tab, tabPane } = createTab("nav-tab-closable-template", "tab-pane-money-template", "Operations", tabId);
+        tab.querySelector(".tab-close-button").addEventListener('click', () => closeTab(tabId));
+        const loadingSpinner = tabPane.querySelector(".loading-container");
+        setClassIf(loadingSpinner, "d-none", false);
 
-        tab.querySelector(".tab-close-button").addEventListener('click', () => CloseTab(ticker));
-
-        tabPane.querySelector(".loading-content-text").textContent = "Loading...";
-        window.TTApi.LoadFillsByFigi()
+        portfolio.loadOperations()
             .then((operations) => {
-                tabPane.querySelector(".loading-content-text").textContent = "";
-                DrawSystemOperations(operations);
+                setClassIf(loadingSpinner, "d-none", true);
+                DrawSystemOperations(portfolio, operations);
             });
         const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
         setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
     }
     // Открываем вкладку
-    $(`#${ticker}-tab`).tab('show');
+    openTab(tabId);
 }
 
 // Обработчик нажатия на кнопку удаления позиции
-function OnPositionRemoveClick(position) {
-    window.TTApi.RemovePosition(position);
+function onPositionRemoveClick(portfolio, position) {
+    portfolio.removePosition(position);
+}
+
+// Получить изменение цены за день
+function loadPriceChange(portfolio) {
+    portfolio.positions.forEach(position => {
+        addOrUpdatePosition(portfolio, position);
+        if (position.figi != "RUB") {
+            getPreviousDayClosePrice(position.figi) // TODO: добавить кэширование и троттлинг
+                .then(previousDayPrice => drawPriceChange(portfolio, position, previousDayPrice));
+        }
+    });
+}
+
+// Отрисовка изменения цены актива
+function drawPriceChange(portfolio, position, previousDayPrice) {
+    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
+    const cellChange = positionRow.querySelector("td.portfolio-change span");
+
+    let change = portfolio.priceChangeUnit == "Percents"
+        ? 100 * position.lastPrice / previousDayPrice - 100
+        : position.lastPrice - previousDayPrice;
+    if (Math.abs(change) < 0.01) { change = 0; }
+    const unit = portfolio.priceChangeUnit == "Percents" ? "%" : position.currency;
+    cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
+    cellChange.textContent = printMoney(change, unit, true);
+    cellChange.className = getMoneyColorClass(change);
 }
 
 // #endregion
 
 // #region Operations
 
-function DrawOperations(position, fills) {
-    const tbody = document.querySelector(`#${convertToSlug(position.ticker)} table tbody`)
+function drawOperations(portfolio, position, fills) {
+    const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
+    const tbody = document.querySelector(`#${tabId} table tbody`)
     tbody.innerHTML = "";
 
     fills.forEach((item, index) => {
@@ -428,8 +514,8 @@ function DrawOperations(position, fills) {
     tbody.prepend(fillRow);
 }
 
-async function DrawSystemOperations(operations) {
-    const ticker = "Operations";
+async function DrawSystemOperations(portfolio, operations) {
+    const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
         .filter(item => !["Buy", "BuyCard", "Sell", "BrokerCommission"].includes(item.operationType))
         .filter(item => operationsFilter.includes(item.operationType));
@@ -439,7 +525,7 @@ async function DrawSystemOperations(operations) {
         .map(item => item.figi)
         .filter(distinct)
         .filter(item => item != undefined)
-        .map(async (figi) => await TTApi.FindPosition(figi)));
+        .map(async (figi) => await portfolio.findPosition(figi)));
 
 
     let total = {}; // Сумма, сгруппированная по каждому типу и валюте
@@ -465,7 +551,7 @@ async function DrawSystemOperations(operations) {
         }
     }
 
-    const tbody = document.querySelector(`#${ticker} table tbody.money-detailed`);
+    const tbody = document.querySelector(`#${tabId} table tbody.money-detailed`);
     tbody.innerHTML = "";
 
     filteredOperations
@@ -520,7 +606,7 @@ async function DrawSystemOperations(operations) {
             tbody.prepend(fillRow);
         });
 
-    const tbodySummary = document.querySelector(`#${ticker} table tbody.money-summary`);
+    const tbodySummary = document.querySelector(`#${tabId} table tbody.money-summary`);
     tbodySummary.innerHTML = "";
 
     const selectedCurrency = localStorage["selectedCurrency"] || "RUB";
@@ -534,7 +620,7 @@ async function DrawSystemOperations(operations) {
 
             // Конвертируем из других валют в выбранную
             Object.keys(group).forEach(currency => {
-                totalValue += group[currency] * GetCurrencyRate(currency, selectedCurrency)
+                totalValue += group[currency] * getCurrencyRate(currency, selectedCurrency)
                 totalValueTitle += `${currency}: ${printMoney(group[currency], currency)}\n`;
             });
 
@@ -556,118 +642,62 @@ async function DrawSystemOperations(operations) {
         });
 }
 
-
-//#endregion
-
-// #region Utilities
-
-// Конвертация строкового представления валюты в символ
-function mapCurrency(currency) {
-    if (!currency) { return ""; }
-    switch (currency) {
-        case "RUB": return "₽";
-        case "USD": return "$";
-        case "EUR": return "€";
-        default: return currency;
-    }
-}
-
-// Отображение денежного значения
-function printMoney(value, currency, withSign = false) {
-    if (value == null || value == undefined || isNaN(value)) { return ""; }
-    const sign = (withSign && value > 0 ? '+' : '')
-    return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${mapCurrency(currency)}`;
-}
-
-// CSS-класс цвета денежного значения
-function getMoneyColorClass(value) {
-    if (value > 0) return 'text-success';
-    if (value < 0) return 'text-danger';
-    return '';
-}
-
-// Конвертация типа инструмента в название группы
-function mapInstrumentType(type) {
-    switch (type) {
-        case "Stock": return "Stocks";
-        case "Bond": return "Bonds";
-        case "Etf": return "ETF";
-        case "Currency": return "Currencies";
-        default: return type;
-    }
-}
-
-/**
-  * Включить/выключить CSS класс для элемента по условию
-  * @param {object} element - HTML элемент
-  * @param {string} className - Название класса
-  * @param {boolean} condition - Условие, при выполнении которого класс будет применён
-  */
-function setClassIf(element, className, condition) {
-    if (!condition && element.classList.contains(className)) {
-        element.classList.remove(className);
-    }
-    else if (condition && !element.classList.contains(className)) {
-        element.classList.add(className);
-    }
-}
-
-/**
- * Преобразовать строку к "безопасному" виду, содержащему только A-Z, a-z, 0-9, -, _
- * @param {string} text 
- */
-function convertToSlug(text) {
-    return text
-        .replace(/ /g,'-')
-        .replace(/[^\w-]+/g,'_');
-}
-
 // #endregion
 
-// #region Tabs
+// #region Settings
 
-/**
-  * Создать новую вкладку по шаблону
-  * @param {string} tabTemplateId - Идентификатор шаблона вкладки
-  * @param {string} tabPaneTemplateId - Идентификатор шаблона содержимого
-  * @param {string} title - Заголовок вкладки
-  * @param {string} href - Идентификатор вкладки
-  */
-function CreateTab(tabTemplateId, tabPaneTemplateId, title, href) {
-    if (!href) { href = title.toLocaleLowerCase(); }
+const webTerminalCheckbox = document.querySelector("#webTerminalCheckbox");
+webTerminalCheckbox.checked = (localStorage["overrideAveragePriceOnWebTerminal"] === "true");
+webTerminalCheckbox.addEventListener("change", (e) => {
+    localStorage["overrideAveragePriceOnWebTerminal"] = e.target.checked;
+});
 
-    // Добавляем вкладку
-    const tab = document.getElementById(tabTemplateId).content.firstElementChild.cloneNode(true);
-    const link = tab.querySelector("a");
-    link.textContent = title;
-    link.id = `${href}-tab`;
-    link.href = `#${href}`;
-    link.setAttribute("aria-controls", `${href}`);
+let updateIntervalTimeout = localStorage["positionsUpdateIntervalInput"] || 60 * 1000;
+let positionsUpdateTimerId;
 
-    // Добавляем содержимое вкладки
-    const tabPane = document.getElementById(tabPaneTemplateId).content.firstElementChild.cloneNode(true);
-    tabPane.id = `${href}`;
-    tabPane.setAttribute("aria-labelledby", `${href}-tab`);
+const updateIntervalInput = document.querySelector("#updateIntervalInput");
+updateIntervalInput.value = updateIntervalTimeout / 1000;
+updateIntervalInput.addEventListener("change", (e) => {
+    updateIntervalTimeout = e.target.value * 1000;
+    localStorage["positionsUpdateIntervalInput"] = updateIntervalTimeout;
+    console.log(`Positions update interval changed. New value: ${updateIntervalTimeout} ms`)
+    loopLoadPortfolio();
+});
 
-    return { tab, tabPane };
+const eraseButton = document.getElementById("erase-button");
+eraseButton.addEventListener("click", () => {
+    // Очищаем хранилище и страницу
+    localStorage.clear();
+    document.getElementById("token-input").value = "";
+    $("#portfolio-table tbody").children().remove();
+    $(".nav-item[data-closable='true']").remove();
+    document.querySelectorAll(".nav-item")
+        .forEach(item => {
+            if (!item.querySelector("#settings-tab")) {
+                item.remove();
+            }
+        });
+    document.querySelector(".portfolio-total-cost").innerHTML = "";
+    TTApi.eraseData();
+    // Скрываем кнопку очистки хранилища
+    setClassIf(eraseButton, "d-none", true);
+});
+
+// Изменить период отображаемой прибыли: за всё время или за торговый день
+function changePortfolioAllDay(portfolio) {
+    portfolio.allDayPeriod = (portfolio.allDayPeriod == "All") ? "Day" : "All";
+    const portfolioAllDaySwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-all-day-switch`);
+    portfolioAllDaySwitch.textContent = portfolio.allDayPeriod;
+    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
+    addPositionSummaryRow(portfolio);
+    TTApi.savePortfolios();
 }
 
-/**
-  * Закрыть вкладку
-  * @param {string} href - Идентификатор вкладки
-  */
-function CloseTab(href) {
-    const tab = document.querySelector(`.nav-item a[href="#${href}"]`).closest(".nav-item");
-    const tabPane = document.getElementById(href);
-    const navTabs = tab.closest(".nav-tabs");
-    tabPane.remove();
-    tab.remove();
-    // Если была закрыта активная вкладка
-    if (!navTabs.querySelector(".nav-link[aria-selected='true'")) {
-        // Открываем вкладку по-умолчанию
-        const defaultTabId = navTabs.querySelector(".nav-link[data-default='true']").id
-        $(`#${defaultTabId}`).tab('show')
-    }
+// Изменить единицы измерения изменения цены: проценты или абсолютное значение
+function changePriceChangeUnit(portfolio) {
+    portfolio.priceChangeUnit = (portfolio.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
+    loadPriceChange(portfolio);
+    TTApi.savePortfolios();
 }
 
 // #endregion
@@ -682,17 +712,12 @@ tokenForm.addEventListener("submit", (e) => {
 
     const data = new FormData(tokenForm);
     const token = data.get("token");
-    localStorage["token"] = token;
-    window.TTApi.token = token;
+    localStorage.setItem("token", token);
+    TTApi.token = token;
 
     setClassIf(eraseButton, "d-none", false);
 
-    // Открываем вкладку по-умолчанию
-    const defaultTabId = document.querySelector("#main-nav .nav-link[data-default='true']").id
-    $(`#${defaultTabId}`).tab('show')
-
-    // Загружаем новые позиции и обновляем таблицу
-    loopLoadPortfolio();
+    main();
 
     return false;
 });
@@ -720,12 +745,18 @@ addPositionForm.addEventListener("submit", (e) => {
     const data = new FormData(addPositionForm);
     const ticker = data.get("position-ticker");
 
+    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+
     // Загружаем сделки по инструменту
-    window.TTApi.LoadFillsByTicker(ticker)
-        .then(_ => window.TTApi.LoadOrderbookByTicker(ticker))
-        .then(_ => {
+    portfolio.loadFillsByTicker(ticker)
+        .then(_ => TTApi.loadOrderbookByTicker(ticker))
+        .then(orderbook => {
             addPositionInput.value = "";
             $('#add-position-modal').modal('hide');
+            // Проставляем последнюю цену
+            const position = portfolio.positions.find(item => item.ticker == ticker);
+            position.lastPrice = orderbook.lastPrice;
+            updatePosition(position);
         })
         .catch(error => {
             addPositionError.textContent = error.message;
@@ -754,7 +785,6 @@ filterOperationsForm.querySelector("#filter-operations-select-none").addEventLis
         .forEach(checkbox => checkbox.checked = false);
 });
 
-
 const operationTypes = [
     "MarginCommission",
     "ServiceCommission",
@@ -769,10 +799,10 @@ const defaultOperationsFilter = operationTypes;
 let operationsFilter = JSON.parse(localStorage.getItem('operationsFilter')) || defaultOperationsFilter;
 
 $('#filter-operations-modal').on('shown.bs.modal', function () {
-    AddFilterOperationsCheckboxes();
+    addFilterOperationsCheckboxes();
 });
 
-function AddFilterOperationsCheckboxes() {
+function addFilterOperationsCheckboxes() {
     filterOperationsContainer.textContent = "";
     operationTypes.forEach(item => {
         const checkbox = document.querySelector('#filter-operations-checkbox-template').content.firstElementChild.cloneNode(true);
@@ -813,29 +843,11 @@ filterOperationsForm.addEventListener("submit", (e) => {
     const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
     setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
 
-    DrawSystemOperations(TTApi.operations[undefined]);
+    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+
+    DrawSystemOperations(portfolio, portfolio.operations[undefined]);
 
     $('#filter-operations-modal').modal('hide');
-});
-
-// #endregion
-
-// #region Settings
-
-const webTerminalCheckbox = document.querySelector("#webTerminalCheckbox");
-webTerminalCheckbox.checked = (localStorage["overrideAveragePriceOnWebTerminal"] === "true");
-webTerminalCheckbox.addEventListener("change", (e) => {
-    localStorage["overrideAveragePriceOnWebTerminal"] = e.target.checked;
-});
-
-
-const updateIntervalInput = document.querySelector("#updateIntervalInput");
-updateIntervalInput.value = updateIntervalTimeout / 1000;
-updateIntervalInput.addEventListener("change", (e) => {
-    updateIntervalTimeout = e.target.value * 1000;
-    localStorage["positionsUpdateIntervalInput"] = updateIntervalTimeout;
-    console.log(`Positions update interval changed. New value: ${updateIntervalTimeout} ms`)
-    loopLoadPortfolio();
 });
 
 // #endregion
