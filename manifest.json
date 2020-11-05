@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*/*"
+        "https://*.tinkoff.ru/invest-terminal/*"
       ],
       "js": [
         "src/js/content.js"
@@ -24,11 +24,14 @@
     ]
   },
   "permissions": [
-    "https://www.tinkoff.ru/invest-terminal/*",
+    "https://*.tinkoff.ru/invest-terminal/*",
     "https://api-invest.tinkoff.ru/openapi/*"
   ],
   "browser_action": {
     "default_title": "Tinkoff Trader Extension",
     "default_popup": "src/popup.html"
-  }
+  },
+  "web_accessible_resources": [
+    "src/js/*"
+  ]
 }
