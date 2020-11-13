@@ -67,7 +67,7 @@ export function processOperation(accumulated, operation) {
 
     const price = operation.price;
     const cost = -operation.payment;
-    const quantity = operation.trades.reduce((res, trade) => res + trade.quantity, 0);
+    const quantity = operation.quantityExecuted;
     const commission = Math.abs(operation.commission?.value) || 0;
     const direction = -Math.sign(operation.payment)
     const costCorrected = cost + commission;
