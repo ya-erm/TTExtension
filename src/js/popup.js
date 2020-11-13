@@ -291,11 +291,34 @@ function addPositionSummaryRow(portfolio) {
 
     setClassIf(positionRow, "cursor-pointer", false);
 
+    const excludeCurrenciesFromTotal = JSON.parse(localStorage["excludeCurrenciesFromTotal"] || "false") ;
+
+    // total - объект вида
+    /** {
+        cost: { // текущая стоимость портфеля, сгруппированная по валютам (USB, EUR, RUB, ...)
+            USD: Number,
+            RUB: Number
+        },
+        expected: { // ожидаемая прибыль, сгруппированная по валютам (USB, EUR, RUB, ...)
+            USD: Number,
+            RUB: Number
+        },
+        fixedPnL: { // зафиксированная прибыль, сгруппированная по валютам (USB, EUR, RUB, ...)
+            USD: Number,
+            RUB: Number
+        }
+    } */
     const total = portfolio.positions.reduce((result, position) => {
-        result.cost[position.currency] = (position.count || 0) * (position.average || 0) + (position.expected || 0) + (result.cost[position.currency] || 0);
-        result.expected[position.currency] = (position.expected || 0) + (result.expected[position.currency] || 0);
-        const fixedPnL = (portfolio.allDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(portfolio, position);
-        result.fixedPnL[position.currency] = (fixedPnL || 0) + (result.fixedPnL[position.currency] || 0);
+        result.cost[position.currency] |= 0;
+        result.expected[position.currency] |= 0;
+        result.fixedPnL[position.currency] |= 0;
+        result.cost[position.currency] += (position.count || 0) * (position.average || 0) + (position.expected || 0);
+        if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
+            // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
+            result.expected[position.currency] += (position.expected || 0);
+            const fixedPnL = (portfolio.allDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(portfolio, position);
+            result.fixedPnL[position.currency] += (fixedPnL || 0);
+        }
         return result;
     }, { cost: {}, expected: {}, fixedPnL: {} });
 
@@ -705,6 +728,14 @@ function changePriceChangeUnit(portfolio) {
     loadPriceChange(portfolio);
     TTApi.savePortfolios();
 }
+
+// Чекбокс "Исключить валюту из строки подытоживающей строки Total"
+const excludeCurrenciesFromTotalCheckbox = document.querySelector("#excludeCurrenciesFromTotalCheckbox");
+excludeCurrenciesFromTotalCheckbox.checked = (localStorage["excludeCurrenciesFromTotal"] === "true");
+excludeCurrenciesFromTotalCheckbox.addEventListener("change", (e) => {
+    localStorage.setItem("excludeCurrenciesFromTotal", e.target.checked);
+    addPositionSummaryRow(selectedPortfolio);
+});
 
 // #endregion
 
