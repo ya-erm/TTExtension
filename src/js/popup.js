@@ -215,6 +215,8 @@ function fillPositionRow(portfolio, positionRow, position) {
     if (calculatedCountNotEqualActual) {
         cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
             `Actual value: ${position.count}`;
+    } else {
+        cellCount.title = "";
     }
 
     const cellAverage = positionRow.querySelector("td.portfolio-average");
@@ -243,9 +245,13 @@ function fillPositionRow(portfolio, positionRow, position) {
     setClassIf(cellCost, "inaccurate-value-text", inaccurateValue);
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
-    cellExpected.textContent = printMoney(position.expected, position.currency, true);
-    cellExpected.className = getMoneyColorClass(position.expected);
-    setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
+    if (position.count != 0) {
+        cellExpected.textContent = printMoney(position.expected, position.currency, true);
+        cellExpected.className = getMoneyColorClass(position.expected);
+        setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
+    } else {
+        cellExpected.textContent = "";
+    }
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
     if (portfolio.allDayPeriod == "All") {
