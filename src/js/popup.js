@@ -743,7 +743,7 @@ addPositionForm.addEventListener("submit", (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
     const data = new FormData(addPositionForm);
-    const ticker = data.get("position-ticker");
+    const ticker = data.get("position-ticker").toUpperCase();
 
     const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
 
