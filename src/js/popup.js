@@ -105,6 +105,11 @@ function createPortfolioTab(portfolio) {
     portfolioAllDaySwitch.addEventListener("click", () => changePortfolioAllDay(portfolio));
     portfolioAllDaySwitch.textContent = portfolio.allDayPeriod;
 
+    // Переключатель единицы измерения изменения ожидаемой прибыли (проценты, абсолютное значение)
+    const portfolioExpectedUnitSwitch = tabPane.querySelector(".portfolio-expected-unit-switch");
+    portfolioExpectedUnitSwitch.addEventListener("click", () => changePortfolioExpectedUnit(portfolio));
+    portfolioExpectedUnitSwitch.textContent = (portfolio.expectedUnit == "Percents") ? "%" : "$";
+
     // Переключатель единицы измерения изменения цены за день (проценты, абсолютное значение)
     const priceChangeUnitSwitch = tabPane.querySelector(".price-change-unit-switch");
     priceChangeUnitSwitch.addEventListener("click", () => changePriceChangeUnit(portfolio));
@@ -246,7 +251,12 @@ function fillPositionRow(portfolio, positionRow, position) {
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     if (position.count != 0) {
-        cellExpected.textContent = printMoney(position.expected, position.currency, true);
+        if (portfolio.expectedUnit == "Percents") {
+            const expectedPercents = 100 * position.expected / (position.count * position.lastPrice) ;
+            cellExpected.textContent = printMoney(expectedPercents, "%", true);
+        } else {
+            cellExpected.textContent = printMoney(position.expected, position.currency, true);
+        }
         cellExpected.className = getMoneyColorClass(position.expected);
         setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
     } else {
@@ -291,7 +301,7 @@ function addPositionSummaryRow(portfolio) {
 
     setClassIf(positionRow, "cursor-pointer", false);
 
-    const excludeCurrenciesFromTotal = JSON.parse(localStorage["excludeCurrenciesFromTotal"] || "false") ;
+    const excludeCurrenciesFromTotal = JSON.parse(localStorage["excludeCurrenciesFromTotal"] || "false");
 
     // total - объект вида
     /** {
@@ -726,6 +736,15 @@ function changePortfolioAllDay(portfolio) {
 function changePriceChangeUnit(portfolio) {
     portfolio.priceChangeUnit = (portfolio.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
     loadPriceChange(portfolio);
+    TTApi.savePortfolios();
+}
+
+// Изменить единицы измерения ожидаемой прибыли: проценты или абсолютное значение
+function changePortfolioExpectedUnit(portfolio) {
+    portfolio.expectedUnit = (portfolio.expectedUnit == "Percents") ? "Absolute" : "Percents";
+    const portfolioExpectedUnitSwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-expected-unit-switch`);
+    portfolioExpectedUnitSwitch.textContent = (portfolio.expectedUnit == "Percents") ? "%" : "$";
+    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
     TTApi.savePortfolios();
 }
 

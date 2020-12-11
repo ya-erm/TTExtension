@@ -45,6 +45,11 @@
     font-weight: 400;
 }
 
+.portfolio-expected-unit-switch {
+    text-decoration: underline;
+    font-weight: 400;
+}
+
 .portfolio-logo {
     height: 20px;
     width: 20px;
