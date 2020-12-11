@@ -35,6 +35,19 @@ export function getMoneyColorClass(value) {
 }
 
 /**
+ * Отображение значения с множителем К, М (например 9.75К, 75.5K, 1.54M)
+ * @param {number} value Числовое значение
+ */
+export function printVolume(value) {
+    if (value == null || value == undefined || isNaN(value)) { return ""; }
+    if (value <= 1000) { return `${value}`; }
+    else if (value < 10_000) { return `${(value / 1_000).toFixed(2)}K`; }
+    else if (value < 100_000) { return `${(value / 1_000).toFixed(1)}K`; }
+    else if (value < 1_000_000) { return `${(value / 1_000).toFixed(0)}K`; }
+    else { return `${(value / 1_000_000).toFixed(2)}M`; }
+}
+
+/**
  * Конвертация типа инструмента в название группы
  * @param {string} type Тип инструмента
  */

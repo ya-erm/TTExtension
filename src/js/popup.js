@@ -3,7 +3,7 @@ import { Portfolio } from "./portfolio.js";
 import { updatePosition } from "./position.js";
 import { closeTab, createTab, findTab, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
-import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, setClassIf } from "./utils.js";
+import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, printVolume, setClassIf } from "./utils.js";
 
 let selectedPortfolio = localStorage.getItem("selectedPortfolio");
 
@@ -215,7 +215,7 @@ function fillPositionRow(portfolio, positionRow, position) {
     const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
 
     const cellCount = positionRow.querySelector("td.portfolio-count");
-    cellCount.textContent = position.count;
+    cellCount.textContent = printVolume(position.count);
     setClassIf(cellCount, "inaccurate-value-text", calculatedCountNotEqualActual);
     if (calculatedCountNotEqualActual) {
         cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
