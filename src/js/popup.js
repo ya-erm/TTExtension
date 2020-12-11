@@ -211,7 +211,9 @@ function fillPositionRow(portfolio, positionRow, position) {
         positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
     }
 
-    const calculatedCountNotEqualActual = position.calculatedCount && position.calculatedCount != position.count;
+    const calculatedCountNotEqualActual = position.calculatedCount 
+        && position.calculatedCount != position.count
+        && position.instrumentType != "Currency";
     const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
 
     const cellCount = positionRow.querySelector("td.portfolio-count");
@@ -220,6 +222,8 @@ function fillPositionRow(portfolio, positionRow, position) {
     if (calculatedCountNotEqualActual) {
         cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
             `Actual value: ${position.count}`;
+    } else if (cellCount.textContent != `${position.count}`) {
+        cellCount.title = `${position.count}`;
     } else {
         cellCount.title = "";
     }
