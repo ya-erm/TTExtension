@@ -7,6 +7,14 @@ export function findTab(href) {
 }
 
 /**
+  * Найти содержимое вкладки
+  * @param {string} href - Идентификатор вкладки
+  */
+ export function findTabPane(href) {
+  return document.querySelector(`.tab-pane[id="${href}"]`);
+}
+
+/**
   * Создать новую вкладку по шаблону
   * @param {string} tabTemplateId - Идентификатор шаблона вкладки
   * @param {string} tabPaneTemplateId - Идентификатор шаблона содержимого
@@ -65,6 +73,8 @@ export function closeTab(href) {
 }
 
 export default {
+    findTab,
+    findTabPane,
     createTab,
     closeTab,
     openTab,

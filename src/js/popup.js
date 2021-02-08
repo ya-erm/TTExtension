@@ -1,7 +1,7 @@
 import { getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { Portfolio } from "./portfolio.js";
 import { updatePosition } from "./position.js";
-import { closeTab, createTab, findTab, openTab } from "./tabs.js";
+import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
 import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, printVolume, setClassIf } from "./utils.js";
 
@@ -18,7 +18,7 @@ async function main() {
             createPortfolioTab(portfolio);
             // Отображаем позиции из памяти для выбранного портфеля
             if (portfolio.id == selectedPortfolio) {
-                drawCachedPositions(portfolio);
+                drawPositions(portfolio);
                 openTab(`portfolio-${portfolio.id}`);
                 selectPortfolio(portfolio);
             }
@@ -70,15 +70,40 @@ function selectPortfolio(portfolio) {
     selectedPortfolio = portfolio.id;
     localStorage.setItem("selectedPortfolio", selectedPortfolio);
     findTab(`portfolio-${portfolio.id}`)?.setAttribute("data-default", "true");
+    fillPositionsFilterFields(portfolio);
 }
 
 /**
- * Отобразить позиции из памяти
+ * Отобразить позиции
  * @param {object} portfolio портфель
  */
-function drawCachedPositions(portfolio) {
-    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position))
+function drawPositions(portfolio) {
+    portfolio.positions.forEach(position => {
+        addOrUpdatePosition(portfolio, position);
+        if (position.figi != "RUB") {
+            getPreviousDayClosePrice(position.figi)
+                .then(previousDayPrice => drawPriceChange(portfolio, position, previousDayPrice));
+        }
+    });
     addPositionSummaryRow(portfolio);
+    sortPositionsTable(portfolio);
+}
+
+/**
+ * Отсортировать таблицу позиций
+ * @param {object} portfolio портфель
+ */
+function sortPositionsTable(portfolio) {
+    const getRowPosition = (tr) => portfolio.positions.find(item => item.figi == tr.id.split("position-")[1]);
+    const comparer = (asc) => (a, b) =>
+        portfolio.comparePositions(getRowPosition(asc ? a : b), getRowPosition(asc ? b : a));
+
+    document.querySelectorAll(`#portfolio-${portfolio.id}-table tbody`)
+        .forEach(tbody => {
+            Array.from(tbody.querySelectorAll('tr:nth-child(n+2)'))
+                .sort(comparer(true)) // TODO: заменить на portfolio.sort.ascending
+                .forEach(tr => tbody.appendChild(tr));
+        });
 }
 
 /**
@@ -94,8 +119,7 @@ function createPortfolioTab(portfolio) {
     const { tab, tabPane } = createTab("nav-tab-template", "tab-pane-portfolio-template", portfolio.title, tabId);
     tab.addEventListener("click", () => {
         selectPortfolio(portfolio);
-
-        drawCachedPositions(portfolio);
+        drawPositions(portfolio);
         loopLoadPortfolio();
     });
     tabPane.querySelector("table").id = `portfolio-${portfolio.id}-table`;
@@ -135,9 +159,8 @@ window.addEventListener("PositionRemoved", function (event) {
 async function loadPortfolio() {
     const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio);
     if (portfolio != undefined) {
-        const positions = await portfolio.loadPositions();
-        positions.forEach(position => addOrUpdatePosition(portfolio, position));
-        loadPriceChange(portfolio);
+        await portfolio.loadPositions();
+        drawPositions(portfolio);
     }
 }
 
@@ -153,10 +176,14 @@ function loopLoadPortfolio() {
 // Добавить или обновить строку позиции
 function addOrUpdatePosition(portfolio, position) {
     const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
-    if (!positionRow) {
-        addPositionRow(portfolio, position);
-    } else {
-        fillPositionRow(portfolio, positionRow, position);
+    if (portfolio.filterPosition(position)) {
+        if (!positionRow) {
+            addPositionRow(portfolio, position);
+        } else {
+            fillPositionRow(portfolio, positionRow, position);
+        }
+    } else if (positionRow) {
+        document.querySelector(`#portfolio-${portfolio.id}_position-${position.figi}`)?.remove();
     }
 }
 
@@ -211,7 +238,7 @@ function fillPositionRow(portfolio, positionRow, position) {
         positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
     }
 
-    const calculatedCountNotEqualActual = position.calculatedCount 
+    const calculatedCountNotEqualActual = position.calculatedCount
         && position.calculatedCount != position.count
         && position.instrumentType != "Currency";
     const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
@@ -245,7 +272,9 @@ function fillPositionRow(portfolio, positionRow, position) {
 
     const cellLast = positionRow.querySelector("td.portfolio-last");
     cellLast.textContent = printMoney(position.lastPrice, position.currency);
-    cellLast.title = "Updated at " + new Date(position.lastPriceUpdated).toTimeString().substring(0, 8);
+    if (!!position.lastPriceUpdated) {
+        cellLast.title = "Updated at " + new Date(position.lastPriceUpdated).toTimeString().substring(0, 8);
+    }
 
     const cellCost = positionRow.querySelector("td.portfolio-cost");
     cellCost.textContent = (position.count != 0)
@@ -256,7 +285,7 @@ function fillPositionRow(portfolio, positionRow, position) {
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     if (position.count != 0) {
         if (portfolio.expectedUnit == "Percents") {
-            const expectedPercents = 100 * position.expected / (position.count * position.lastPrice) ;
+            const expectedPercents = 100 * position.expected / (position.count * position.lastPrice);
             cellExpected.textContent = printMoney(expectedPercents, "%", true);
         } else {
             cellExpected.textContent = printMoney(position.expected, position.currency, true);
@@ -464,21 +493,11 @@ function onPositionRemoveClick(portfolio, position) {
     portfolio.removePosition(position);
 }
 
-// Получить изменение цены за день
-function loadPriceChange(portfolio) {
-    portfolio.positions.forEach(position => {
-        addOrUpdatePosition(portfolio, position);
-        if (position.figi != "RUB") {
-            getPreviousDayClosePrice(position.figi) // TODO: добавить кэширование и троттлинг
-                .then(previousDayPrice => drawPriceChange(portfolio, position, previousDayPrice));
-        }
-    });
-}
-
 // Отрисовка изменения цены актива
 function drawPriceChange(portfolio, position, previousDayPrice) {
     const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
-    const cellChange = positionRow.querySelector("td.portfolio-change span");
+    const cellChange = positionRow?.querySelector("td.portfolio-change span");
+    if (!cellChange) { return; }
 
     let change = portfolio.priceChangeUnit == "Percents"
         ? 100 * position.lastPrice / previousDayPrice - 100
@@ -731,15 +750,14 @@ function changePortfolioAllDay(portfolio) {
     portfolio.allDayPeriod = (portfolio.allDayPeriod == "All") ? "Day" : "All";
     const portfolioAllDaySwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-all-day-switch`);
     portfolioAllDaySwitch.textContent = portfolio.allDayPeriod;
-    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
-    addPositionSummaryRow(portfolio);
+    drawPositions(portfolio);
     TTApi.savePortfolios();
 }
 
 // Изменить единицы измерения изменения цены: проценты или абсолютное значение
 function changePriceChangeUnit(portfolio) {
     portfolio.priceChangeUnit = (portfolio.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
-    loadPriceChange(portfolio);
+    drawPositions(portfolio);
     TTApi.savePortfolios();
 }
 
@@ -748,7 +766,7 @@ function changePortfolioExpectedUnit(portfolio) {
     portfolio.expectedUnit = (portfolio.expectedUnit == "Percents") ? "Absolute" : "Percents";
     const portfolioExpectedUnitSwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-expected-unit-switch`);
     portfolioExpectedUnitSwitch.textContent = (portfolio.expectedUnit == "Percents") ? "%" : "$";
-    portfolio.positions.forEach(position => addOrUpdatePosition(portfolio, position));
+    drawPositions(portfolio);
     TTApi.savePortfolios();
 }
 
@@ -816,7 +834,7 @@ addPositionForm.addEventListener("submit", (e) => {
             // Проставляем последнюю цену
             const position = portfolio.positions.find(item => item.ticker == ticker);
             position.lastPrice = orderbook.lastPrice;
-            updatePosition(position);
+            drawPositions(portfolio);
         })
         .catch(error => {
             addPositionError.textContent = error.message;
@@ -824,6 +842,81 @@ addPositionForm.addEventListener("submit", (e) => {
 
     return false;
 });
+
+// #endregion
+
+// #region Filter positions form
+
+const filterPositionsForm = document.getElementById("filter-positions-form");
+const filterPositionsError = filterPositionsForm.querySelector(".status-message");
+
+filterPositionsForm.addEventListener("submit", (e) => {
+    if (e.preventDefault) { e.preventDefault(); }
+
+    const defaultFilter = {
+        currencies: {
+            rub: true,
+            usd: true,
+            eur: true,
+        },
+        zeroPositions: {
+            nonZero: true,
+            zero: true,
+        }
+    }
+
+    const filter = {
+        currencies: {
+            rub: filterPositionsForm.querySelector("#filter-positions-currency-rub").checked,
+            usd: filterPositionsForm.querySelector("#filter-positions-currency-usd").checked,
+            eur: filterPositionsForm.querySelector("#filter-positions-currency-eur").checked,
+        },
+        zeroPositions: {
+            nonZero: filterPositionsForm.querySelector("#filter-positions-non-zero").checked,
+            zero: filterPositionsForm.querySelector("#filter-positions-zero").checked,
+        }
+    }
+
+    if (!filter.zeroPositions.nonZero && !filter.zeroPositions.zero ||
+        !Object.keys(filter.currencies).reduce((res, key) => res || filter.currencies[key], false)) {
+        filterPositionsError.textContent = "Select at least one option in each section";
+        return;
+    } else {
+        filterPositionsError.textContent = "";
+    }
+
+    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    if (JSON.stringify(filter) == JSON.stringify(defaultFilter)) {
+        delete portfolio.filter;
+    } else {
+        portfolio.filter = filter;
+    }
+    TTApi.savePortfolios();
+
+    applyFilterPositionsButtonStyle(portfolio);
+
+    drawPositions(portfolio);
+    addPositionSummaryRow(portfolio);
+
+    $('#filter-positions-modal').modal('hide');
+});
+
+function applyFilterPositionsButtonStyle(portfolio) {
+    const tabPane = findTabPane(`portfolio-${portfolio.id}`);
+    const filterPositionsButton = tabPane.querySelector('button[data-target="#filter-positions-modal"]');
+    setClassIf(filterPositionsButton, "text-primary", portfolio.filter != undefined);
+}
+
+function fillPositionsFilterFields(portfolio) {
+    applyFilterPositionsButtonStyle(portfolio);
+    // Currencies
+    filterPositionsForm.querySelector("#filter-positions-currency-rub").checked = portfolio.filter?.currencies?.rub ?? true;
+    filterPositionsForm.querySelector("#filter-positions-currency-usd").checked = portfolio.filter?.currencies?.usd ?? true;
+    filterPositionsForm.querySelector("#filter-positions-currency-eur").checked = portfolio.filter?.currencies?.eur ?? true;
+    // Zero positions
+    filterPositionsForm.querySelector("#filter-positions-non-zero").checked = portfolio.filter?.zeroPositions?.nonZero ?? true;
+    filterPositionsForm.querySelector("#filter-positions-zero").checked = portfolio.filter?.zeroPositions?.zero ?? true;
+}
 
 // #endregion
 
