@@ -108,13 +108,24 @@ export class Portfolio {
      * Отсортировать позиции
      */
     sortPositions() {
-        this.positions.sort((a, b) => {
-            let res = a.instrumentType.localeCompare(b.instrumentType);
-            if (res != 0) { return res; }
-            if (a.count == 0 && b.count != 0) { return 1 };
-            if (b.count == 0 && a.count != 0) { return -1 };
-            return a.ticker.localeCompare(b.ticker);
-        });
+        this.positions.sort(this.comparePositions);
+    }
+
+    /**
+     * Сравнить две позиции
+     */
+    comparePositions(a, b) {
+        if (a == undefined && b != undefined) { return 1; }
+        if (a != undefined && b == undefined) { return -1; }
+        if (a == undefined && b == undefined) { return 0; }
+        // Сравнение по типу инструмента
+        let compareByType = a.instrumentType.localeCompare(b.instrumentType);
+        if (compareByType != 0) { return compareByType; }
+        // Сравнение по количеству (zero/non-zero)
+        if (a.count == 0 && b.count != 0) { return 1 };
+        if (b.count == 0 && a.count != 0) { return -1 };
+        // Сравнение по тикеру
+        return a.ticker.localeCompare(b.ticker);
     }
 
     /**
@@ -233,6 +244,27 @@ export class Portfolio {
         }
     }
 
+    /**
+     * Проверить позицию на соответствие фильтру
+     * @param {object} position - позиция
+     * @returns {boolean} true, если позиция соответствует фильтру
+     */
+    filterPosition(position) {
+        if (this.filter == undefined) { return true; }
+        // Filter by currency
+        if (this.filter?.currencies && this.filter.currencies[position.currency.toLowerCase()] == false) {
+            return false;
+        }
+        // Filter by zero/non-zero
+        if (this.filter?.zeroPositions?.zero == false && position.count == 0) {
+            return false;
+        }
+        if (this.filter?.zeroPositions?.nonZero == false && position.count != 0) {
+            return false;
+        }
+        return true;
+    }
+
     // #endregion
 
     // #region Fills
@@ -293,7 +325,7 @@ export class Portfolio {
 
         operations
             .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
-            .sort((a,b) => new Date(a.date) - new Date(b.date))
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
             .forEach(item => {
                 let fill = fills.find(_ => _.id == item.id);
                 if (!fill) {
@@ -330,7 +362,7 @@ export class Portfolio {
         console.log(`Fills ${position.ticker} created: ${created}, updated: ${updated}`)
         this.fills[position.ticker] = fills;
         this.save();
-        
+
         position.calculatedCount = currentQuantity;
         if (position.count != currentQuantity) {
             console.warn("Calculated by fills position quantity", currentQuantity, "is not equal with actual position quantity", position.count);
