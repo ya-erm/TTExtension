@@ -565,7 +565,7 @@ function drawOperations(portfolio, position, fills) {
     const fillRow = document.querySelector("#fills-row-template").content.firstElementChild.cloneNode(true);
 
     const cellFee = fillRow.querySelector("td.fills-fee");
-    cellFee.textContent = fills.reduce((res, fill) => res + fill.commission, 0.0)?.toFixed(2);
+    cellFee.textContent = fills.reduce((res, fill) => res + (fill.commission ?? 0), 0.0)?.toFixed(2);
     cellFee.title = "Total commission";
 
     const cellFixedPnL = fillRow.querySelector("td.fills-fixed-pnl span");
