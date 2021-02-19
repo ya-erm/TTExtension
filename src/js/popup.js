@@ -536,7 +536,8 @@ function drawOperations(portfolio, position, fills) {
         cellPrice.textContent = item.price.toFixed(2);
 
         const cellCount = fillRow.querySelector("td.fills-count");
-        cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+") + item.quantity;
+        cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+") 
+            + (item.quantityExecuted ?? item.quantity);
 
         const cellPayment = fillRow.querySelector("td.fills-payment");
         cellPayment.textContent = item.payment.toFixed(2);

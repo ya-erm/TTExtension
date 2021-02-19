@@ -341,6 +341,12 @@ export class Portfolio {
                     updated++;
                 }
 
+                if (fill.quantity != item.quantity ||
+                    fill.quantityExecuted != item.quantityExecuted) {
+                        fill.quantity = item.quantity;
+                        fill.quantityExecuted = item.quantityExecuted;
+                    }
+
                 const result = processOperation({
                     currentQuantity,
                     totalFixedPnL,
