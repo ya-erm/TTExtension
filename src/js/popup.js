@@ -579,7 +579,7 @@ function drawOperations(portfolio, position, fills) {
 async function DrawSystemOperations(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
-        .filter(item => !["Buy", "BuyCard", "Sell", "BrokerCommission"].includes(item.operationType))
+        .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
         .filter(item => operationsFilter.includes(item.operationType));
 
     const distinct = (value, index, self) => self.indexOf(value) === index;
@@ -594,6 +594,7 @@ async function DrawSystemOperations(portfolio, operations) {
 
     const applyStyleByType = (cell, operationType) => {
         switch (operationType) {
+            case "BrokerCommission":
             case "MarginCommission":
             case "ServiceCommission":
             case "TaxDividend":
@@ -636,7 +637,7 @@ async function DrawSystemOperations(portfolio, operations) {
             applyStyleByType(cellType, item.operationType);
 
             const cellAsset = fillRow.querySelector("td.portfolio-asset");
-            if (item.operationType == "Dividend" || item.operationType == "Coupon" || item.operationType == "TaxDividend") {
+            if (["Dividend", "Coupon", "TaxDividend", "BrokerCommission"].includes(item.operationType)) {
                 const position = positions.find(position => position.figi == item.figi);
                 if (position != undefined) {
                     cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + position.instrumentType.toLowerCase() + "s/" + position.ticker;
@@ -674,7 +675,8 @@ async function DrawSystemOperations(portfolio, operations) {
     const selectedCurrency = localStorage["selectedCurrency"] || "RUB";
 
     Object.keys(total)
-        .filter(key => key == "MarginCommission" || key == "ServiceCommission" || key == "Dividend" || key == "Coupon")
+        //.filter(key => ["MarginCommission", "ServiceCommission", "Dividend", "Coupon"].includes(key))
+        .sort((a, b) => operationTypes.indexOf(a) - operationTypes.indexOf(b))
         .forEach(key => {
             const group = total[key];
             let totalValue = 0;
@@ -939,13 +941,14 @@ filterOperationsForm.querySelector("#filter-operations-select-none").addEventLis
 });
 
 const operationTypes = [
+    "PayIn",
+    "Dividend",
+    "Coupon",
+    "BrokerCommission",
     "MarginCommission",
     "ServiceCommission",
     "TaxDividend",
     "Tax",
-    "Dividend",
-    "Coupon",
-    "PayIn",
     "PayOut",
 ];
 const defaultOperationsFilter = operationTypes;
