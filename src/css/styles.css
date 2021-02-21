@@ -118,6 +118,55 @@
     to { top: 0.75rem; }
 }
 
+/* Trading */
+
+.trading-panel {
+    height: 5rem;
+}
+
+.trading-chart-container {
+    background: green;
+    display: flex;
+}
+
+.trading-chart {
+    flex-grow: 1;
+}
+
+.trading-chart-period-buttons {
+    padding: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.trading-chart-period-button {
+    line-height: 1.15rem;
+}
+
+.trading-asset {
+    font-size: 1.25rem;
+}
+
+.trading-price-container {
+    padding: 0.25rem;
+}
+
+.trading-price {
+    font-size: 1.5rem;
+    line-height: 1.75rem;
+}
+
+.trading-price-change {
+    font-size: 1.15rem;
+    line-height: 1.25rem;
+}
+
+.trading-place-order input {
+    width: 5rem;
+}
+
 /* Other */
 
 .inaccurate-value-text {

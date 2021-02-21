@@ -82,7 +82,13 @@ function drawPositions(portfolio) {
         addOrUpdatePosition(portfolio, position);
         if (position.figi != "RUB") {
             getPreviousDayClosePrice(position.figi)
-                .then(previousDayPrice => drawPriceChange(portfolio, position, previousDayPrice));
+                .then(previousDayPrice => {
+                    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
+                    const cellChange = positionRow?.querySelector("td.portfolio-change span");
+                    if (cellChange) {
+                        drawPriceChange(position, previousDayPrice, portfolio.priceChangeUnit, cellChange);
+                    }
+                });
         }
     });
     addPositionSummaryRow(portfolio);
@@ -459,6 +465,9 @@ function onPositionClick(portfolio, position) {
         // Загружаем новые сделки и обновляем таблицу
         portfolio.loadFillsByTicker(position.ticker)
             .then((fills) => drawOperations(portfolio, position, fills));
+
+        // Отображаем панель торговли
+        drawTradingPanel(portfolio, position);
     }
     // Открываем вкладку
     openTab(tabId);
@@ -493,17 +502,19 @@ function onPositionRemoveClick(portfolio, position) {
     portfolio.removePosition(position);
 }
 
-// Отрисовка изменения цены актива
-function drawPriceChange(portfolio, position, previousDayPrice) {
-    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
-    const cellChange = positionRow?.querySelector("td.portfolio-change span");
-    if (!cellChange) { return; }
-
-    let change = portfolio.priceChangeUnit == "Percents"
+/**
+ * Отрисовка изменения цены актива
+ * @param {object} position позиция
+ * @param {number} previousDayPrice цена актива за предыдущий день
+ * @param {string} priceChangeUnit единица измерения: "Percents" или "Currency"
+ * @param {object} cellChange HTML элемент, в котором нужно отрисовать изменение цены
+ */
+function drawPriceChange(position, previousDayPrice, priceChangeUnit, cellChange) {
+    let change = priceChangeUnit == "Percents"
         ? 100 * position.lastPrice / previousDayPrice - 100
         : position.lastPrice - previousDayPrice;
     if (Math.abs(change) < 0.01) { change = 0; }
-    const unit = portfolio.priceChangeUnit == "Percents" ? "%" : position.currency;
+    const unit = priceChangeUnit == "Percents" ? "%" : position.currency;
     cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
     cellChange.textContent = printMoney(change, unit, true);
     cellChange.className = getMoneyColorClass(change);
@@ -515,7 +526,7 @@ function drawPriceChange(portfolio, position, previousDayPrice) {
 
 function drawOperations(portfolio, position, fills) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
-    const tbody = document.querySelector(`#${tabId} table tbody`)
+    const tbody = document.querySelector(`#${tabId} table.table-fills tbody`)
     tbody.innerHTML = "";
 
     fills.forEach((item, index) => {
@@ -536,7 +547,7 @@ function drawOperations(portfolio, position, fills) {
         cellPrice.textContent = item.price.toFixed(2);
 
         const cellCount = fillRow.querySelector("td.fills-count");
-        cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+") 
+        cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+")
             + (item.quantityExecuted ?? item.quantity);
 
         const cellPayment = fillRow.querySelector("td.fills-payment");
@@ -705,6 +716,61 @@ async function DrawSystemOperations(portfolio, operations) {
 
             tbodySummary.append(fillRow);
         });
+}
+
+function drawTradingPanel(portfolio, position) {
+    const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
+    const tradingPanel = document.querySelector(`#${tabId} .trading-panel`);
+    const priceSpan = tradingPanel.querySelector(".trading-price");
+
+    const formPlaceOrder = tradingPanel.querySelector(".trading-place-order form");
+    const inputPrice = tradingPanel.querySelector(".trading-place-order-price");
+    const inputLots = tradingPanel.querySelector(".trading-place-order-lots");
+    const spanCost = tradingPanel.querySelector(".trading-place-order-cost");
+
+    let pricePrecision = 2;
+    const instrument = TTApi.instruments.find(item => item.figi == position.figi);
+    if (instrument?.minPriceIncrement) {
+        inputPrice.setAttribute("step", instrument.minPriceIncrement);
+        pricePrecision = instrument.minPriceIncrement.toString().length - 2;
+        if (pricePrecision < 2) { pricePrecision = 2; }
+    }
+
+    priceSpan.textContent = printMoney(position.lastPrice, position.currency, false, pricePrecision);
+    getPreviousDayClosePrice(position.figi)
+        .then(previousDayPrice => {
+            const spanPriceChange = tradingPanel.querySelector(".trading-price-change span");
+            drawPriceChange(position, previousDayPrice, "Currency", spanPriceChange);
+            const spanPriceChangePercents = tradingPanel.querySelector(".trading-price-change-percents span");
+            drawPriceChange(position, previousDayPrice, "Percents", spanPriceChangePercents);
+        });
+
+    ["keyup", "change", "paste"].forEach(eventName => {
+        inputPrice.addEventListener(eventName, (e) => {
+            spanCost.textContent = printMoney(e.target.value * inputLots.value, position.currency);
+        });
+        inputLots.addEventListener(eventName, (e) => {
+            spanCost.textContent = printMoney(inputPrice.value * e.target.value, position.currency);
+        });
+    });
+    priceSpan.addEventListener("click", () => {
+        inputPrice.value = position.lastPrice.toFixed(pricePrecision);
+        spanCost.textContent = printMoney(inputPrice.value * inputLots.value, position.currency);
+    });
+
+    formPlaceOrder.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const order = {
+            lots: parseInt(inputLots.value),
+            operation: e.submitter.dataset.value,
+            price: parseFloat(inputPrice.value),
+        };
+        if (confirm(`Confirm to ${order.operation.toLowerCase()} ${position.ticker}?\n`
+            + `Price: ${order.price}\n` + `Lots: ${order.lots}\n` + `Cost: ${order.price * order.lots}`)) {
+            const response = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
+            console.log(response);
+        }
+    });
 }
 
 // #endregion

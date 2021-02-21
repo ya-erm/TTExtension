@@ -17,11 +17,14 @@ export function mapCurrency(currency) {
  * @param {number} value Числовое значение
  * @param {string} currency Валюта
  * @param {boolean} withSign true, если нужно добавить знак + перед положительным значением
+ * @param {number} precision Количество знаков после запятой
  */
-export function printMoney(value, currency, withSign = false) {
+export function printMoney(value, currency, withSign = false, precision = 2) {
     if (value == null || value == undefined || isNaN(value)) { return ""; }
-    const sign = (withSign && value > 0 ? '+' : '')
-    return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${mapCurrency(currency)}`;
+    const sign = (withSign && value > 0 ? '+' : '');
+    const parts = value.toFixed(precision).split(".");
+    const fractionalPart = parts.length > 1 ? "." + parts[1] : "";
+    return `${sign}${parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ")}${fractionalPart} ${mapCurrency(currency)}`;
 }
 
 /**

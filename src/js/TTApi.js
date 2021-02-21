@@ -25,10 +25,12 @@ export const TTApi = {
     loadCandles,
     loadOrderbook,
     loadOrderbookByTicker,
+    placeLimitOrder,
     getCurrencyRate,
     savePortfolios,
     eraseData,
     httpGet,
+    httpPut,
 };
 
 window.TTApi = TTApi;
@@ -62,6 +64,33 @@ async function httpGet(path) {
         return (data.payload);
     } else {
         console.log(`GET ${path}\n`, response.statusText);
+        const error = new Error(response.statusText);
+        error.code = response.status;
+        throw error;
+    }
+}
+
+/**
+ * Отправить HTTP PUT запрос к API
+ * @param {string} path - относительный адрес
+ * @param {object} body - тело запроса
+ * @returns 
+ */
+async function httpPut(path, body) {
+    const response = await fetch(apiURL + path, {
+        method: 'POST',
+        headers: {
+            Authorization: 'Bearer ' + TTApi.token,
+            'Content-Type': 'application/json;charset=utf-8',
+        },
+        body: JSON.stringify(body)
+    });
+    if (response.status == 200) {
+        const data = await response.json();
+        console.log(`POST ${path}`, body, '\n', data);
+        return (data.payload);
+    } else {
+        console.log(`POST ${path}`, body, '\n', response.statusText);
         const error = new Error(response.statusText);
         error.code = response.status;
         throw error;
@@ -250,4 +279,16 @@ async function getCurrencyRate(currency) {
         TTApi.currencyRates[currency] = currencyRate;
     }
     return currencyRate;
+}
+
+/**
+ * Создание лимитной заявки
+ * @param {string} figi - идентификатор актива
+ * @param {object} body - тело запроса { lots: 0, operation: "Buy", price: 0 }
+ * @param {string} account - идентификатор счёта
+ * @returns 
+ */
+async function placeLimitOrder(figi, body, account = undefined) {
+    const payload = await httpPut(`/orders/limit-order?figi=${figi}` + (!!account ? `&brokerAccountId=${account}` : ""), body);
+    return payload;
 }
