@@ -44,7 +44,7 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     }
     const toDate = new Date(previousTradingDay.getTime() + 8 * 60 * 60000); // Add 8 hours
     // Ищем информацию о свечах в кэше
-    let candles = TTApi.findCandles(figi, previousTradingDay, toDate, "hour");
+    let candles = await TTApi.findCandles(figi, previousTradingDay, toDate, "hour");
     if (candles.length == 0) {
         // Если не нашли, загружаем из API
         candles = await TTApi.loadCandles(figi, previousTradingDay, toDate, "hour");
