@@ -1,6 +1,7 @@
 import { processOperation } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
+import instrumentsRepository from "./storage/instrumentsRepository.js";
 import { TTApi } from "./TTApi.js";
 
 export class Portfolio {
@@ -275,7 +276,7 @@ export class Portfolio {
      */
     async loadFillsByTicker(ticker) {
         let figi = this.positions.find(_ => _.ticker == ticker)?.figi
-            || TTApi.instruments.find(_ => _.ticker == ticker)?.figi;
+            || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
 
         if (!figi) {
             const item = await TTApi.loadInstrumentByTicker(ticker);
@@ -343,9 +344,9 @@ export class Portfolio {
 
                 if (fill.quantity != item.quantity ||
                     fill.quantityExecuted != item.quantityExecuted) {
-                        fill.quantity = item.quantity;
-                        fill.quantityExecuted = item.quantityExecuted;
-                    }
+                    fill.quantity = item.quantity;
+                    fill.quantityExecuted = item.quantityExecuted;
+                }
 
                 const result = processOperation({
                     currentQuantity,
