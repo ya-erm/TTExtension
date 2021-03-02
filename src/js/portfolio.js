@@ -5,7 +5,26 @@ import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { TTApi } from "./TTApi.js";
 
+/** @typedef {import('./position.js').Position} Position */
+/** @typedef {import('./storage/operationsRepository.js').Operation} Operation */
+
+/** 
+ * @class Portfolio
+ * @property {string} id - идентификатор портфеля
+ * @property {string} title - название портфеля
+ * @property {string?} account - идентификатор счёта
+ * @property {Array<Position>} positions - список позиций
+ * @property {Object} fills - словарь сделок
+ * @property {string} allDayPeriod - переключатель отображения прибыли (All, Day)
+ * @property {string} priceChangeUnit - переключатель отображения изменения цены за день (Percents, Absolute)
+ * @property {{field: string, ascending: boolean}?} sorting - параметры сортировки
+ */
 export class Portfolio {
+    /**
+     * @constructor
+     * @param {string} title
+     * @param {string} id
+     */
     constructor(title, id) {
         this.id = id;
         this.title = title;
@@ -56,7 +75,7 @@ export class Portfolio {
 
     /**
      * Обновить позиции
-     * @param {array} items - список позиций
+     * @param {Array<PortfolioPosition>} items - список позиций
      */
     updatePortfolio(items) {
         const now = new Date();
@@ -114,6 +133,8 @@ export class Portfolio {
 
     /**
      * Сравнить две позиции
+     * @param {Position} a 
+     * @param {Position} b 
      */
     comparePositions(a, b) {
         if (a == undefined && b != undefined) { return 1; }
@@ -131,7 +152,7 @@ export class Portfolio {
 
     /**
      * Обновить валютные позиции
-     * @param {array} items 
+     * @param {Array<CurrencyPosition>} items 
      */
     updateCurrencies(items) {
         items.forEach(item => {
@@ -229,7 +250,7 @@ export class Portfolio {
 
     /**
      * Удалить позицию из списка позиций
-     * @param {object} position - позиция
+     * @param {Position} position - позиция
      */
     removePosition(position) {
         if (position.count != 0) {
@@ -248,7 +269,7 @@ export class Portfolio {
 
     /**
      * Проверить позицию на соответствие фильтру
-     * @param {object} position - позиция
+     * @param {Position} position - позиция
      * @returns {boolean} true, если позиция соответствует фильтру
      */
     filterPosition(position) {
@@ -312,8 +333,8 @@ export class Portfolio {
 
     /**
      * Обновить список сделок и просчитать позиции
-     * @param {object} position - позиция
-     * @param {array} operations - список операций
+     * @param {Position} position - позиция
+     * @param {Array<Operation>} operations - список операций
      */
     updateFills(position, operations) {
         let created = 0;
