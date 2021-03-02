@@ -210,6 +210,14 @@
         <!--Money transactions-->
         <template id="tab-pane-money-template">
             <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
+                <div class="loading-container d-none">
+                    <span class="d-flex justify-content-center w-100">
+                        <div class="spinner-border" role="status">
+                            <span class="sr-only"></span>
+                        </div>
+                        <label class="ml-2">Updating...</label>
+                    </span>
+                </div>
                 <table class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
                     <thead class="thead-sticky">
                         <tr>
@@ -231,14 +239,6 @@
                     <tbody class="money-summary"></tbody>
                     <tbody class="money-detailed"></tbody>
                 </table>
-                <div class="loading-container d-none">
-                    <span class="d-flex justify-content-center w-100">
-                        <div class="spinner-border" role="status">
-                            <span class="sr-only"></span>
-                        </div>
-                        <label class="ml-2">Loading...</label>
-                    </span>
-                </div>
             </div>
         </template>
         <template id="money-row-template">

@@ -148,3 +148,7 @@
 .link:hover {
     text-decoration: underline;
 }
+
+.loading-container {
+    margin: 1rem;
+}
