@@ -105,8 +105,7 @@ async function loadOperationsByFigi(figi, account = undefined) {
     const payload = await httpGet(`/operations?from=${fromDate}&to=${toDate}`
         + (!!figi ? `&figi=${figi}` : "")
         + (!!account ? `&brokerAccountId=${account}` : ""));
-
-    return payload.operations;
+    return payload.operations.map(item => ({ ...item, account }));
 }
 
 /**
