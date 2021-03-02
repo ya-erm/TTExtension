@@ -969,6 +969,7 @@ $('#filter-operations-modal').on('shown.bs.modal', function () {
 
 function addFilterOperationsCheckboxes() {
     filterOperationsContainer.textContent = "";
+    const fragment = document.createDocumentFragment();
     operationTypes.forEach(item => {
         const checkbox = document.querySelector('#filter-operations-checkbox-template').content.firstElementChild.cloneNode(true);
 
@@ -981,8 +982,9 @@ function addFilterOperationsCheckboxes() {
         checkboxLabel.textContent = item;
         checkboxLabel.setAttribute("for", item);
 
-        filterOperationsContainer.appendChild(checkbox);
+        fragment.appendChild(checkbox);
     });
+    filterOperationsContainer.appendChild(fragment);
 }
 
 filterOperationsForm.addEventListener("submit", async (e) => {
