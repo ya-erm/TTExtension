@@ -1,4 +1,28 @@
+/**
+ * @class Position
+ * @property {string} ticker - короткий идентификатор
+ * @property {string} figi - идентификатор FIGI (Financial Instrument Global Identifier)
+ * @property {string} isin - идентификатор ISIN (International Securities Identification Number)
+ * @property {string} name - полное название актива
+ * @property {string} instrumentType - тип (Stock, Currency, Bond, Etf)
+ * @property {string} currency - - валюта (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY)
+ * @property {number} count - количество
+ * @property {number?} average - средняя цена
+ * @property {number?} expected - ожидаемая (незафиксированная) прибыль или убыток
+ * @property {number?} fixedPnL - зафиксированная прибыль или убыток
+ * @property {number?} average - средняя цена
+ * @property {number?} lastPrice - текущая цена (последняя известная цена)
+ * @property {Date?} lastPriceUpdated - дата последнего обновления цены
+ * Дополнительные свойства:
+ * @property {string} portfolioId - идентификатор портфеля
+ * @property {boolean} needCalc - true, если требуется пересчёт позиции
+ */
 export class Position {
+    /**
+     * @constructor
+     * @param {string} portfolioId 
+     * @param {PortfolioPosition} item 
+     */
     constructor(portfolioId, item) {
         this.ticker = item.ticker;
         this.name = item.name;

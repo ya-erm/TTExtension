@@ -5,6 +5,11 @@ import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
 import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, printVolume, setClassIf } from "./utils.js";
 
+// Импорт типов
+/** @typedef {import ("./portfolio.js").Portfolio} Portfolio*/
+/** @typedef {import ("./position.js").Position} Position*/
+/** @typedef {import ("./fill.js").Fill} Fill*/
+
 let selectedPortfolio = localStorage.getItem("selectedPortfolio");
 
 async function main() {
@@ -63,7 +68,7 @@ main();
 
 /**
  * Выбрать портфель
- * @param {object} portfolio портфель
+ * @param {Portfolio} portfolio
  */
 function selectPortfolio(portfolio) {
     findTab(`portfolio-${selectedPortfolio}`)?.setAttribute("data-default", "false");
@@ -75,7 +80,7 @@ function selectPortfolio(portfolio) {
 
 /**
  * Отобразить позиции
- * @param {object} portfolio портфель
+ * @param {Portfolio} portfolio
  */
 function drawPositions(portfolio) {
     portfolio.positions.forEach(position => {
@@ -91,7 +96,7 @@ function drawPositions(portfolio) {
 
 /**
  * Отсортировать таблицу позиций
- * @param {object} portfolio портфель
+ * @param {Portfolio} portfolio
  */
 function sortPositionsTable(portfolio) {
     const getRowPosition = (tr) => portfolio.positions.find(item => item.figi == tr.id.split("position-")[1]);
@@ -108,7 +113,7 @@ function sortPositionsTable(portfolio) {
 
 /**
  * Создать вкладку портфеля
- * @param {object} portfolio Портфель
+ * @param {Portfolio} portfolio
  */
 function createPortfolioTab(portfolio) {
     const tabId = `portfolio-${portfolio.id}`;
@@ -189,7 +194,8 @@ function addOrUpdatePosition(portfolio, position) {
 
 /**
   * Создать новую строку в таблице позиций
-  * @param {object} position - позиция
+  * @param {Portfolio} portfolio
+  * @param {Position} position
   */
 function addPositionRow(portfolio, position) {
     const positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
@@ -219,9 +225,9 @@ function addPositionRow(portfolio, position) {
 
 /**
   * Заполнить строку в таблице позиций данными
-  * @param {object} portfolio - портфель
-  * @param {object} positionRow - строка таблицы
-  * @param {object} position - позиция
+  * @param {Portfolio} portfolio - портфель
+  * @param {HTMLElement} positionRow - строка таблицы
+  * @param {Position} position - позиция
   */
 function fillPositionRow(portfolio, positionRow, position) {
     if (position.count == 0) {
@@ -307,7 +313,11 @@ function fillPositionRow(portfolio, positionRow, position) {
     }
 }
 
-// Рассчитать зафиксированную прибыль за торговый день
+/**
+ * Рассчитать зафиксированную прибыль за торговый день
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ */
 function getTodayFixedPnL(portfolio, position) {
     const now = new Date();
     const fills = portfolio.fills[position.ticker] || [];
@@ -324,7 +334,10 @@ function getTodayFixedPnL(portfolio, position) {
     return fixedPnLToday != 0 ? fixedPnLToday : undefined;
 }
 
-// Добавить итоговую строку по позициям
+/**
+ * Добавить итоговую строку по позициям
+ * @param {Portfolio} portfolio
+ */
 function addPositionSummaryRow(portfolio) {
     let positionRow = document.getElementById(`portfolio-${portfolio.id}_position-summary`);
     if (positionRow) { positionRow.remove(); }
@@ -429,7 +442,11 @@ function addPositionSummaryRow(portfolio) {
     }
 }
 
-// Изменить выбранную для отображения итоговой суммы валюту
+/**
+ * Изменить выбранную для отображения итоговой суммы валюту
+ * @param {Portfolio} portfolio
+ * @param {string} selectedCurrency 
+ */
 function changeSelectedCurrency(portfolio, selectedCurrency) {
     if (selectedCurrency == "RUB") {
         selectedCurrency = "USD";
@@ -440,7 +457,11 @@ function changeSelectedCurrency(portfolio, selectedCurrency) {
     addPositionSummaryRow(portfolio);
 };
 
-// Обработчик нажатия на строку в таблице позиций
+/**
+ * Обработчик нажатия на строку в таблице позиций
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ */
 function onPositionClick(portfolio, position) {
     const ticker = position.ticker;
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(ticker)}`;
@@ -455,7 +476,6 @@ function onPositionClick(portfolio, position) {
         if (portfolio.fills[position.ticker]) {
             drawOperations(portfolio, position, portfolio.fills[position.ticker]);
         }
-
         // Загружаем новые сделки и обновляем таблицу
         portfolio.loadFillsByTicker(position.ticker)
             .then((fills) => drawOperations(portfolio, position, fills));
@@ -464,7 +484,9 @@ function onPositionClick(portfolio, position) {
     openTab(tabId);
 }
 
-// Обработчик нажатия на ссылку операций
+/**
+ * Обработчик нажатия на ссылку операций
+ */
 function onOperationsLinkClick() {
     const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
     const tabId = `portfolio-${portfolio.id}_operations`;
@@ -496,12 +518,21 @@ function onOperationsLinkClick() {
     openTab(tabId);
 }
 
-// Обработчик нажатия на кнопку удаления позиции
+/**
+ * Обработчик нажатия на кнопку удаления позиции
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ */
 function onPositionRemoveClick(portfolio, position) {
     portfolio.removePosition(position);
 }
 
-// Отрисовка изменения цены актива
+/**
+ * Отрисовка изменения цены актива
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ * @param {number} previousDayPrice 
+ */
 function drawPriceChange(portfolio, position, previousDayPrice) {
     const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
     const cellChange = positionRow?.querySelector("td.portfolio-change span");
@@ -521,6 +552,12 @@ function drawPriceChange(portfolio, position, previousDayPrice) {
 
 // #region Operations
 
+/**
+ * Отрисовка сделок по активу
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ * @param {Array<Fill>} fills 
+ */
 function drawOperations(portfolio, position, fills) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
     const tbody = document.querySelector(`#${tabId} table tbody`)
@@ -585,6 +622,11 @@ function drawOperations(portfolio, position, fills) {
     tbody.prepend(fillRow);
 }
 
+/**
+ * Отрисовка прочих операций
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ */
 async function DrawSystemOperations(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
@@ -756,7 +798,10 @@ eraseButton.addEventListener("click", () => {
     setClassIf(eraseButton, "d-none", true);
 });
 
-// Изменить период отображаемой прибыли: за всё время или за торговый день
+/**
+ * Изменить период отображаемой прибыли: за всё время или за торговый день
+ * @param {Portfolio} portfolio
+ */
 function changePortfolioAllDay(portfolio) {
     portfolio.allDayPeriod = (portfolio.allDayPeriod == "All") ? "Day" : "All";
     const portfolioAllDaySwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-all-day-switch`);
@@ -765,14 +810,22 @@ function changePortfolioAllDay(portfolio) {
     TTApi.savePortfolios();
 }
 
-// Изменить единицы измерения изменения цены: проценты или абсолютное значение
+/**
+ * Изменить единицы измерения изменения цены: проценты или абсолютное значение
+ * @param {Portfolio} portfolio
+ */
 function changePriceChangeUnit(portfolio) {
     portfolio.priceChangeUnit = (portfolio.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
+    const priceChangeUnitSwitch = document.querySelector(`#portfolio-${portfolio.id} .price-change-unit-switch`);
+    priceChangeUnitSwitch.textContent = (portfolio.priceChangeUnit == "Percents") ? "%" : "$";
     drawPositions(portfolio);
     TTApi.savePortfolios();
 }
 
-// Изменить единицы измерения ожидаемой прибыли: проценты или абсолютное значение
+/**
+ * Изменить единицы измерения ожидаемой прибыли: проценты или абсолютное значение
+ * @param {Portfolio} portfolio
+ */
 function changePortfolioExpectedUnit(portfolio) {
     portfolio.expectedUnit = (portfolio.expectedUnit == "Percents") ? "Absolute" : "Percents";
     const portfolioExpectedUnitSwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-expected-unit-switch`);
