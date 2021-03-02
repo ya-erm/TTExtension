@@ -1,4 +1,5 @@
 import { Portfolio } from "./portfolio.js";
+import instrumentsRepository from "./storage/instrumentsRepository.js";
 
 const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
@@ -39,7 +40,6 @@ window.TTApi = TTApi;
 function eraseData() {
     TTApi.token = undefined;
     TTApi.currencyRates = {};
-    TTApi.instruments = [];
     TTApi.portfolios = [];
 }
 
@@ -105,8 +105,7 @@ async function loadOperationsByFigi(figi, account = undefined) {
     const payload = await httpGet(`/operations?from=${fromDate}&to=${toDate}`
         + (!!figi ? `&figi=${figi}` : "")
         + (!!account ? `&brokerAccountId=${account}` : ""));
-
-    return payload.operations;
+    return payload.operations.map(item => ({ ...item, account }));
 }
 
 /**
@@ -115,7 +114,7 @@ async function loadOperationsByFigi(figi, account = undefined) {
  */
 async function loadInstrumentByFigi(figi) {
     const instrument = await httpGet(`/market/search/by-figi?figi=${figi}`);
-    saveInstrument(instrument);
+    instrumentsRepository.putOne(instrument);
     return instrument;
 }
 
@@ -127,7 +126,7 @@ async function loadInstrumentByTicker(ticker) {
     const payload = await httpGet(`/market/search/by-ticker?ticker=${ticker}`);
     if (payload.instruments.length > 0) {
         const instrument = payload.instruments[0];
-        saveInstrument(instrument);
+        instrumentsRepository.putOne(instrument);
         return instrument;
     }
     return null;
@@ -175,23 +174,12 @@ async function loadOrderbookByTicker(ticker) {
  * @param {string} figi - идентификатор
  */
 async function findInstrumentByFigi(figi) {
-    let instrument = TTApi.instruments.find(_ => _.figi == figi);
+    let instrument = await instrumentsRepository.getOneByFigi(figi);
     if (!instrument) {
         instrument = await loadInstrumentByFigi(figi);
-        saveInstrument(instrument);
+        instrumentsRepository.putOne(instrument);
     }
     return instrument;
-}
-
-/**
- * Сохранить инструмент
- * @param {object} instrument - инструмент
- */
-function saveInstrument(instrument) {
-    if (TTApi.instruments.find(item => item.figi == instrument.figi) == undefined) {
-        TTApi.instruments.push(instrument);
-        localStorage.setItem('instruments', JSON.stringify(TTApi.instruments));
-    }
 }
 
 /**
@@ -201,8 +189,8 @@ function saveInstrument(instrument) {
  * @param {Date} to 
  * @param {string} interval 
  */
-function findCandles(figi, from, to, interval) {
-    const instrument = TTApi.instruments.find(item => item.figi == figi);
+async function findCandles(figi, from, to, interval) {
+    const instrument = await instrumentsRepository.getOneByFigi(figi);
     if (instrument?.candles == undefined || instrument.candles[interval] == undefined) {
         return [];
     }
@@ -225,7 +213,7 @@ async function saveCandles(figi, candles) {
         instrument.candles[interval] = [];
     }
     instrument.candles[interval].push(...candles);
-    localStorage.setItem('instruments', JSON.stringify(TTApi.instruments));
+    instrumentsRepository.putOne(instrument);
 }
 
 /**

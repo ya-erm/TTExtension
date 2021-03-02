@@ -1,6 +1,7 @@
 import { getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { Portfolio } from "./portfolio.js";
 import { updatePosition } from "./position.js";
+import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
 import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, printVolume, setClassIf } from "./utils.js";
@@ -476,13 +477,21 @@ function onOperationsLinkClick() {
         const loadingSpinner = tabPane.querySelector(".loading-container");
         setClassIf(loadingSpinner, "d-none", false);
 
-        portfolio.loadOperations()
-            .then((operations) => {
-                setClassIf(loadingSpinner, "d-none", true);
-                DrawSystemOperations(portfolio, operations);
-            });
         const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
         setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
+
+        // Отображаем операции из памяти
+        getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter)
+            .then(operations => {
+                DrawSystemOperations(portfolio, operations);
+            });
+
+        // Загружаем новые операции и отображаем их
+        portfolio.loadOperations()
+            .then((operations) => {
+                DrawSystemOperations(portfolio, operations);
+                setClassIf(loadingSpinner, "d-none", true);
+            });
     }
     // Открываем вкладку
     openTab(tabId);
@@ -536,7 +545,7 @@ function drawOperations(portfolio, position, fills) {
         cellPrice.textContent = item.price.toFixed(2);
 
         const cellCount = fillRow.querySelector("td.fills-count");
-        cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+") 
+        cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+")
             + (item.quantityExecuted ?? item.quantity);
 
         const cellPayment = fillRow.querySelector("td.fills-payment");
@@ -579,12 +588,9 @@ function drawOperations(portfolio, position, fills) {
 
 async function DrawSystemOperations(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
-    const filteredOperations = operations
-        .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
-        .filter(item => operationsFilter.includes(item.operationType));
 
     const distinct = (value, index, self) => self.indexOf(value) === index;
-    const positions = await Promise.all(filteredOperations
+    const positions = await Promise.all(operations
         .map(item => item.figi)
         .filter(distinct)
         .filter(item => item != undefined)
@@ -618,7 +624,7 @@ async function DrawSystemOperations(portfolio, operations) {
     const tbody = document.querySelector(`#${tabId} table tbody.money-detailed`);
     tbody.innerHTML = "";
 
-    filteredOperations
+    operations
         .reverse()
         .forEach((item, index) => {
             const fillRow = document.querySelector("#money-row-template").content.firstElementChild.cloneNode(true);
@@ -977,7 +983,7 @@ function addFilterOperationsCheckboxes() {
     });
 }
 
-filterOperationsForm.addEventListener("submit", (e) => {
+filterOperationsForm.addEventListener("submit", async (e) => {
     if (e.preventDefault) { e.preventDefault(); }
     let filter = [];
     const checkboxes = filterOperationsForm.querySelectorAll("[name=operationType]");
@@ -1002,7 +1008,8 @@ filterOperationsForm.addEventListener("submit", (e) => {
 
     const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
 
-    DrawSystemOperations(portfolio, portfolio.operations[undefined]);
+    const operations = await getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter);
+    DrawSystemOperations(portfolio, operations);
 
     $('#filter-operations-modal').modal('hide');
 });
