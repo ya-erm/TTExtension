@@ -88,3 +88,22 @@ export async function useReadTransaction(dbParams, execute) {
         request.onerror = () => reject(request.error);
     });
 }
+
+/**
+ * Использовать транзакцию на чтение (несколько функций)
+ * @param {DataBaseParams} dbParams - параметры подключения к базе данных
+ * @param {(objectStore: IDBObjectStore) => Array<IDBRequest>} enumerateRequests - перечисление функций работы с хранилищем (get, getAll, ...)
+ */
+export async function useReadTransactionMany(dbParams, enumerateRequests) {
+    const db = await useDbContext(dbParams);
+    const transaction = db.transaction([dbParams.storeName], "readonly");
+    const objectStore = transaction.objectStore(dbParams.storeName);
+    const requests = enumerateRequests(objectStore)
+        .map(request =>
+            new Promise((resolve, reject) => {
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }));
+    
+    return Promise.all(requests);
+}

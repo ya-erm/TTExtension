@@ -1,4 +1,4 @@
-import { useReadTransaction } from './database.js';
+import { useReadTransaction, useReadTransactionMany } from './database.js';
 import { Repository } from './repository.js';
 
 /**
@@ -34,7 +34,7 @@ class OperationsRepository extends Repository {
     constructor(account) {
         super({
             dbName: "operations",
-            dbVersion: 2,
+            dbVersion: 3,
             storeName,
             migrate: (openDbRequest, version) => {
                 const db = openDbRequest.result;
@@ -50,6 +50,11 @@ class OperationsRepository extends Repository {
                         operationsStore.createIndex("accountFigiIndex", ["account", "figi"], { unique: false });
                         break;
                     }
+                    case 2: {
+                        const operationsStore = openDbRequest.transaction.objectStore(storeName);
+                        operationsStore.createIndex("accountTypeIndex", ["account", "operationType"], { unique: false });
+                        break;
+                    }
                 }
             }
         });
@@ -63,6 +68,31 @@ class OperationsRepository extends Repository {
      */
     async getAllByFigi(figi) {
         return await useReadTransaction(this.dbParams, objectStore => objectStore.index("accountFigiIndex").getAll([this.account, figi]));
+    }
+
+    /**
+     * Получить все операции указанного типа
+     * @param {string} type - тип операции
+     * @returns {Promise<Array<Operation>>}
+     */
+    async getAllByType(type) {
+        return await useReadTransaction(this.dbParams, objectStore => objectStore.index("accountTypeIndex").getAll([this.account, type]));
+    }
+
+    /**
+     * Получить все операции указанных типов
+     * @param {Array<string>} types - массив типов операций
+     * @returns {Promise<Array<Operation>>}
+     */
+    async getAllByTypes(types) {
+        /** @type {Array<Array<Operation>>} */
+        const results = await useReadTransactionMany(this.dbParams, objectStore =>
+            types.map(type =>
+                objectStore.index("accountTypeIndex").getAll([this.account, type])
+            )
+        );
+        /** @type {Array<Operation>} */
+        return results.flat();
     }
 
     /**
