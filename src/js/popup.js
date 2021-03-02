@@ -478,8 +478,8 @@ function onOperationsLinkClick() {
 
         portfolio.loadOperations()
             .then((operations) => {
-                setClassIf(loadingSpinner, "d-none", true);
                 DrawSystemOperations(portfolio, operations);
+                setClassIf(loadingSpinner, "d-none", true);
             });
         const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
         setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);

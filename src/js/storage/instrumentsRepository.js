@@ -1,5 +1,5 @@
-import { instrumentsStoreName } from './instrumentsInit.js'
-import { useReadTransaction, useWriteTransaction } from './database.js'
+import { useReadTransaction } from './database.js';
+import { Repository } from './repository.js';
 
 /**
  * @typedef Instrument
@@ -14,77 +14,59 @@ import { useReadTransaction, useWriteTransaction } from './database.js'
  * @property {object} candles - рыночные данные
  */
 
-/**
-* Сохранить инструмент в БД
-* @param {Instrument} instrument - инструмент
-* @returns {Promise<void>}
-*/
-async function putOne(instrument) {
-    return await useWriteTransaction(instrumentsStoreName, objectStore => objectStore.put(instrument));
-}
+/** Название хранилища в базе данных */
+const storeName = "instruments";
 
 /**
- * Сохранить список инструментов в БД
- * @param {Array<Instrument>} instruments - список инструментов
- * @returns {Promise<void>}
+ * Хранилище инструментов
+ * @extends {Repository<Instrument>}
  */
-async function putMany(instruments) {
-    return await useWriteTransaction(instrumentsStoreName, objectStore => {
-        instruments.forEach(item => {
-            objectStore.put(item);
+class InstrumentsRepository extends Repository {
+    constructor() {
+        super({
+            dbName: "instruments",
+            dbVersion: 1,
+            storeName,
+            migrate: (openDbRequest, version) => {
+                const db = openDbRequest.result;
+                switch (version) {
+                    case 0:
+                        const instrumentsStore = db.createObjectStore(storeName, { keyPath: "figi" });
+                        instrumentsStore.createIndex("tickerIndex", "ticker", { unique: true });
+                        instrumentsStore.createIndex("isinIndex", "isin", { unique: true });
+                }
+            }
         });
-    });
+    }
+
+    /**
+     * Получить инструмент по идентификатору FIGI
+     * @param {string} figi - идентификатор инструмента FIGI
+     * @returns {Promise<Instrument>}
+     */
+    async getOneByFigi(figi) {
+        return await this.getOne(figi);
+    }
+
+    /**
+     * Получить инструмент по тикеру
+     * @param {string} ticker - тикер инструмента
+     * @returns {Promise<Instrument>}
+     */
+    async getOneByTicker(ticker) {
+        return await useReadTransaction(this.dbParams, objectStore => objectStore.index("tickerIndex").get(ticker));
+    }
+    
+    /**
+     * Получить инструмент по идентификатору ISIN
+     * @param {string} isin - идентификатор инструмента ISIN
+     * @returns {Promise<Instrument>}
+     */
+    async getOneByIsin(isin) {
+        return await useReadTransaction(this.dbParams, objectStore => objectStore.index("isinIndex").get(isin));
+    }
 }
 
-/**
- * Получить все инструменты
- * @returns {Promise<Array<Instrument>>}
- */
-async function getAll() {
-    return await useReadTransaction(instrumentsStoreName, objectStore => objectStore.getAll());
-}
-
-/**
- * Получить инструмент по тикеру
- * @param {string} ticker - идентификатор инструмента
- * @returns {Promise<Instrument>}
- */
-async function getOne(ticker) {
-    return await useReadTransaction(instrumentsStoreName, objectStore => objectStore.get(ticker));
-}
-
-/**
- * Получить инструмент по идентификатору FIGI
- * @param {string} figi - идентификатор инструмента
- * @returns {Promise<Instrument>}
- */
-async function getOneByFigi(figi) {
-    return await useReadTransaction(instrumentsStoreName, objectStore => objectStore.index("figiIndex").get(figi));
-}
-
-/**
- * Удалить инструмент по тикеру
- * @param {string} ticker - идентификатор инструмента
- * @returns {Promise<void>}
- */
-async function deleteOne(ticker) {
-    return await useWriteTransaction(instrumentsStoreName, objectStore => objectStore.delete(ticker));
-}
-
-const instrumentsRepository = {
-    // Create, Update
-    putOne,
-    putMany,
-    // Read
-    getOne,
-    getOneByTicker: getOne,
-    getOneByFigi,
-    getAll,
-    // Delete
-    deleteOne,
-}
+const instrumentsRepository = new InstrumentsRepository();
 
 export default instrumentsRepository;
-
-// For debug
-window.instrumentsRepository = instrumentsRepository;
