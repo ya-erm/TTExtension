@@ -407,8 +407,8 @@ function addPositionSummaryRow(portfolio) {
     assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
     assetCell.addEventListener("click", onOperationsLinkClick);
 
-    const tbody = document.querySelector(`#portfolio-${portfolio.id}-table tbody.positions-summary-row`);
-    tbody.appendChild(positionRow);
+    const tfoot = document.querySelector(`#portfolio-${portfolio.id}-table tfoot.positions-summary-row`);
+    tfoot.appendChild(positionRow);
 
     const totalCostSpanPrev = document.querySelector(".portfolio-total-cost");
     const totalCostSpan = totalCostSpanPrev.cloneNode(true);
