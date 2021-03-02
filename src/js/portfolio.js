@@ -1,6 +1,8 @@
 import { processOperation } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
+import instrumentsRepository from "./storage/instrumentsRepository.js";
+import getOperationsRepository from "./storage/operationsRepository.js";
 import { TTApi } from "./TTApi.js";
 
 export class Portfolio {
@@ -10,7 +12,6 @@ export class Portfolio {
         this.account = undefined;
         this.positions = [];
         this.fills = {};
-        this.operations = {};
         this.allDayPeriod = "All"; // All | Day
         this.priceChangeUnit = "Percents"; // Percents | Absolute
     }
@@ -196,6 +197,7 @@ export class Portfolio {
             const operations = await TTApi.loadOperationsByFigi(position.figi, this.account);
 
             if (operations.length > 0) {
+                getOperationsRepository(this.account).putMany(operations);
                 this.updateFills(position, operations);
             }
         });
@@ -275,7 +277,7 @@ export class Portfolio {
      */
     async loadFillsByTicker(ticker) {
         let figi = this.positions.find(_ => _.ticker == ticker)?.figi
-            || TTApi.instruments.find(_ => _.ticker == ticker)?.figi;
+            || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
 
         if (!figi) {
             const item = await TTApi.loadInstrumentByTicker(ticker);
@@ -286,7 +288,7 @@ export class Portfolio {
         }
 
         const operations = await TTApi.loadOperationsByFigi(figi, this.account);
-        this.operations[ticker] = operations;
+        getOperationsRepository(this.account).putMany(operations);
         const position = await this.findPosition(figi);
 
         if (!this.positions.includes(position)) {
@@ -304,7 +306,7 @@ export class Portfolio {
      */
     async loadOperations() {
         const operations = await TTApi.loadOperationsByFigi(undefined, this.account);
-        this.operations[undefined] = operations;
+        getOperationsRepository(this.account).putMany(operations);
         return operations;
     }
 
@@ -343,9 +345,9 @@ export class Portfolio {
 
                 if (fill.quantity != item.quantity ||
                     fill.quantityExecuted != item.quantityExecuted) {
-                        fill.quantity = item.quantity;
-                        fill.quantityExecuted = item.quantityExecuted;
-                    }
+                    fill.quantity = item.quantity;
+                    fill.quantityExecuted = item.quantityExecuted;
+                }
 
                 const result = processOperation({
                     currentQuantity,
