@@ -1,6 +1,5 @@
 import { getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { Portfolio } from "./portfolio.js";
-import { updatePosition } from "./position.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
@@ -588,9 +587,12 @@ function drawOperations(portfolio, position, fills) {
 
 async function DrawSystemOperations(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
+    const filteredOperations = operations
+        .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
+        .filter(item => operationsFilter.includes(item.operationType));
 
     const distinct = (value, index, self) => self.indexOf(value) === index;
-    const positions = await Promise.all(operations
+    const positions = await Promise.all(filteredOperations
         .map(item => item.figi)
         .filter(distinct)
         .filter(item => item != undefined)
@@ -624,8 +626,8 @@ async function DrawSystemOperations(portfolio, operations) {
     const tbody = document.querySelector(`#${tabId} table tbody.money-detailed`);
     tbody.innerHTML = "";
 
-    operations
-        .reverse()
+    filteredOperations
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
         .forEach((item, index) => {
             const fillRow = document.querySelector("#money-row-template").content.firstElementChild.cloneNode(true);
 
