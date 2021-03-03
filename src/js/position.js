@@ -53,6 +53,9 @@ export class Position {
 
         /** @type {number?} рассчитанное по сделкам количество */
         this.calculatedCount = undefined;
+
+        /** @type {number?} цена инструмента на момент окончания предыдущего дня */
+        this.previousDayPrice = undefined;
     }
 }
 

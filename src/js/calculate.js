@@ -56,8 +56,27 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     }
 }
 
-//@ts-ignore
-window.getPreviousDayClosePrice = getPreviousDayClosePrice;
+/**
+ * Рассчитать изменение цены актива в процентах
+ * @param {number} previousDayPrice 
+ * @param {number} currentPrice 
+ */
+export function calcPriceChangePercents(previousDayPrice, currentPrice) {
+    const change = 100 * currentPrice / previousDayPrice - 100;
+    if (Math.abs(change) < 0.01) { return 0; }
+    return change;
+}
+
+/**
+ * Рассчитать изменение цены 
+ * @param {number} previousDayPrice 
+ * @param {number} currentPrice 
+ */
+export function calcPriceChange(previousDayPrice, currentPrice) {
+    const change = currentPrice - previousDayPrice;
+    if (Math.abs(change) < 0.01) { return 0; }
+    return change;
+}
 
 /**
  * Функция просчёта операций
