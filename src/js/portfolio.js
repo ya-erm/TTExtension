@@ -1,5 +1,5 @@
 // @ts-check
-import { processOperation } from "./calculate.js";
+import { calcPriceChange, calcPriceChangePercents, processOperation } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
@@ -214,7 +214,7 @@ export class Portfolio {
             // Сравнение по тикеру
             return a.ticker.localeCompare(b.ticker);
         }
-        
+
         /** @type {(position: Position) => number} Селектор */
         let fieldSelector = (_) => undefined;
 
@@ -241,7 +241,23 @@ export class Portfolio {
                 fieldSelector = (position) => position.fixedPnL ? position.fixedPnL : undefined;
                 break;
             case "change":
-                // TODO: добавить сортировку по изменению цены
+                fieldSelector =
+                    this.settings.priceChangeUnit == "Percents"
+                        ? (p) => {
+                            if (p.previousDayPrice && p.lastPrice) {
+                                const change = calcPriceChangePercents(p.previousDayPrice, p.lastPrice);
+                                return change ? change : undefined;
+                            }
+                            return undefined;
+                        }
+                        : (p) => {
+                            if (p.previousDayPrice && p.lastPrice) {
+                                const change = calcPriceChange(p.previousDayPrice, p.lastPrice);
+                                return Math.abs(change) < 0.01 ? undefined : change;
+                            }
+                            return undefined;
+                        }
+                break;
             default:
                 return withAsc(defaultComparer);
         }
@@ -250,7 +266,7 @@ export class Portfolio {
         const comparer = (asc) => (p1, p2) => {
             const a = fieldSelector(p1);
             const b = fieldSelector(p2);
-            
+
             if (a == undefined && b != undefined) { return 1; }
             if (a != undefined && b == undefined) { return -1; }
             if (a == undefined && b == undefined) { return 0; }
@@ -447,7 +463,7 @@ export class Portfolio {
     /**
      * Обновить список сделок и просчитать позиции
      * @param {Position} position - позиция
-     * @param {Array<Operation>} operations - список операций
+     * @param {Array<import("./TTApi.js").Operation>} operations - список операций
      */
     updateFills(position, operations) {
         let created = 0;

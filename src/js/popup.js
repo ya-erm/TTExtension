@@ -1,5 +1,5 @@
 // @ts-check
-import { getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
+import { calcPriceChange, calcPriceChangePercents, getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Portfolio } from "./portfolio.js";
 import { Position } from "./position.js";
@@ -86,7 +86,10 @@ function drawPositions(portfolio) {
         addOrUpdatePosition(portfolio, position);
         if (position.figi != "RUB") {
             getPreviousDayClosePrice(position.figi)
-                .then(previousDayPrice => drawPriceChange(portfolio, position, previousDayPrice));
+                .then(previousDayPrice => {
+                    position.previousDayPrice = previousDayPrice;
+                    drawPriceChange(portfolio, position, previousDayPrice);
+                });
         }
     });
     addPositionSummaryRow(portfolio);
@@ -562,9 +565,8 @@ function drawPriceChange(portfolio, position, previousDayPrice) {
     if (!cellChange) { return; }
 
     let change = portfolio.settings.priceChangeUnit == "Percents"
-        ? 100 * position.lastPrice / previousDayPrice - 100
-        : position.lastPrice - previousDayPrice;
-    if (Math.abs(change) < 0.01) { change = 0; }
+        ? calcPriceChangePercents(previousDayPrice, position.lastPrice)
+        : calcPriceChange(previousDayPrice, position.lastPrice);
     const unit = portfolio.settings.priceChangeUnit == "Percents" ? "%" : position.currency;
     cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
     cellChange.textContent = printMoney(change, unit, true);
@@ -599,6 +601,7 @@ function addPortfolioSortButtonHandlers(portfolio) {
             }
             sortButtonIcon.textContent = portfolio.settings.sorting.ascending ? "↓" : "↑";
             sortPositionsTable(portfolio);
+            TTApi.savePortfolios();
         })
     })
 }
