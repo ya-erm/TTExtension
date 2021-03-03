@@ -1,7 +1,7 @@
- /**
-  * Конвертация строкового представления валюты в символ
-  * @param {string} currency Валюта (RUB, USD, EUR)
-  */
+/**
+ * Конвертация строкового представления валюты в символ
+ * @param {string} currency Валюта (RUB, USD, EUR)
+ */
 export function mapCurrency(currency) {
     if (!currency) { return ""; }
     switch (currency) {

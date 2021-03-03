@@ -40,12 +40,14 @@
     top: 1rem;
 } 
 
-.portfolio-all-day-switch {
-    text-decoration: underline;
-    font-weight: 400;
+.sort-positions-button {
+    display: inline-flex;
+    cursor: pointer;
 }
 
-.portfolio-expected-unit-switch {
+.price-change-unit-switch,
+.portfolio-expected-unit-switch,
+.portfolio-all-day-switch {
     text-decoration: underline;
     font-weight: 400;
 }

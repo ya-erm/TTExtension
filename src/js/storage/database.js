@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef DataBaseParams
  * @property {string} dbName - название базы данных
@@ -23,7 +24,7 @@ export function useDbContext(dbParams) {
                 dbParams.migrate(openRequest, version);
                 version += 1;
             }
-            evt.currentTarget.onsuccess = () => {
+            openRequest.onsuccess = () => {
                 console.log(`Обновление базы данных "${dbParams.dbName}" выполнено успешно`);
                 const db = openRequest.result;
                 resolve(db);
