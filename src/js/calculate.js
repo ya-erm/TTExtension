@@ -1,3 +1,4 @@
+// @ts-check
 import { TTApi } from "./TTApi.js";
 
 /**
@@ -8,14 +9,14 @@ import { TTApi } from "./TTApi.js";
 export function getCurrencyRate(from, to) {
     if (from == to) { return 1.0 }
 
-    const usdToRub = TTApi.currencyRates["USD"] || TTApi.getCurrencyRate("USD"); // Доллар США
+    const usdToRub = TTApi.currencyRates["USD"]; // Доллар США
     if (from == "USD" && to == "RUB") {
         return usdToRub;
     } else if (from == "RUB" && to == "USD") {
         return 1.0 / usdToRub;
     }
 
-    const eurToRub = TTApi.currencyRates["EUR"] || TTApi.getCurrencyRate("EUR"); // Евро
+    const eurToRub = TTApi.currencyRates["EUR"]; // Евро
     if (from == "EUR" && to == "RUB") {
         return eurToRub;
     } else if (from == "RUB" && to == "EUR") {
@@ -55,6 +56,7 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     }
 }
 
+//@ts-ignore
 window.getPreviousDayClosePrice = getPreviousDayClosePrice;
 
 /**

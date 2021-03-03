@@ -1,3 +1,4 @@
+// @ts-check
 import { useReadTransaction } from './database.js';
 import { Repository } from './repository.js';
 

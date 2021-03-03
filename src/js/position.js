@@ -1,48 +1,64 @@
+// @ts-check
 /**
  * @class Position
- * @property {string} ticker - короткий идентификатор
- * @property {string} figi - идентификатор FIGI (Financial Instrument Global Identifier)
- * @property {string} isin - идентификатор ISIN (International Securities Identification Number)
- * @property {string} name - полное название актива
- * @property {string} instrumentType - тип (Stock, Currency, Bond, Etf)
- * @property {string} currency - - валюта (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY)
- * @property {number} count - количество
- * @property {number?} average - средняя цена
- * @property {number?} expected - ожидаемая (незафиксированная) прибыль или убыток
- * @property {number?} fixedPnL - зафиксированная прибыль или убыток
- * @property {number?} average - средняя цена
- * @property {number?} lastPrice - текущая цена (последняя известная цена)
- * @property {Date?} lastPriceUpdated - дата последнего обновления цены
- * Дополнительные свойства:
- * @property {string} portfolioId - идентификатор портфеля
- * @property {boolean} needCalc - true, если требуется пересчёт позиции
  */
 export class Position {
     /**
      * @constructor
      * @param {string} portfolioId 
-     * @param {PortfolioPosition} item 
+     * @param {import("./TTApi").PortfolioPosition} item 
      */
     constructor(portfolioId, item) {
+        /** @type {string} короткий идентификатор */
         this.ticker = item.ticker;
+
+        /** @type {string} полное название актива */
         this.name = item.name;
+
+        /** @type {string} идентификатор FIGI (Financial Instrument Global Identifier) */
         this.figi = item.figi;
+
+        /** @type {string} идентификатор ISIN (International Securities Identification Number) */
         this.isin = item.isin;
-        this.count = item.balance;
+        
+        /** @type {string} тип (Stock, Currency, Bond, Etf) */
         this.instrumentType = item.instrumentType;
-        this.average = item.averagePositionPrice?.value;
-        this.expected = item.expectedYield?.value;
+        
+        /** @type {string} валюта (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY) */
         this.currency = item.averagePositionPrice?.currency || item.expectedYield?.currency;
+        
+        /** @type {number} количество */
+        this.count = item.balance;
+        
+        /** @type {number?} средняя цена */
+        this.average = item.averagePositionPrice?.value;
+        
+        /** @type {number?} ожидаемая (незафиксированная) прибыль или убыток */
+        this.expected = item.expectedYield?.value;
+        
+        /** @type {number} зафиксированная прибыль или убыток */
+        this.fixedPnL = 0;
+
+        /** @type {number?} текущая цена (последняя известная цена) */
         this.lastPrice = item.expectedYield?.value / item.balance + item.averagePositionPrice?.value;
 
-        this.portfolioId = portfolioId;
+        /** @type {Date?} дата последнего обновления цены */
         this.lastPriceUpdated = new Date();
+        
+        /** @type {string} идентификатор портфеля */
+        this.portfolioId = portfolioId;
+
+        /** @type {boolean} true, если требуется пересчёт позиции */
         this.needCalc = true;
+
+        /** @type {number?} рассчитанное по сделкам количество */
+        this.calculatedCount = undefined;
     }
 }
 
 /**
  * Обновить позицию
+ * @param {Position} position - позиция
  * @param {number} average - средняя цена
  * @param {number} fixedPnL - зафиксированную прибыль
  */
