@@ -204,7 +204,7 @@ export class Portfolio {
         };
 
         /** @type {(a: Position, b: Position) => number}  */
-        let comparer = (a, b) => {
+        let defaultComparer = (a, b) => {
             // Сравнение по типу инструмента
             let compareByType = a.instrumentType.localeCompare(b.instrumentType);
             if (compareByType != 0) { return compareByType; }
@@ -214,57 +214,51 @@ export class Portfolio {
             // Сравнение по тикеру
             return a.ticker.localeCompare(b.ticker);
         }
-
-        /** @type {(a: Position, b: Position) => number} Сравнение по количеству (zero/non-zero) */
-        const nonZeroFirst = (a, b) => {
-            if (a.count == 0 && b.count != 0) { return 1 };
-            if (b.count == 0 && a.count != 0) { return -1 };
-            return 0;
-        }
+        
+        /** @type {(position: Position) => number} Селектор */
+        let fieldSelector = (_) => undefined;
 
         const sort = this.settings.sorting.field ?? "default";
         switch (sort) {
             case "ticker":
-                comparer = (a, b) => a.ticker.localeCompare(b.ticker);
-                break;
+                return withAsc((a, b) => a.ticker.localeCompare(b.ticker));
             case "count":
-                comparer = (a, b) => a.count - b.count;
+                fieldSelector = (position) => position.count;
                 break;
             case "average":
-                comparer = (a, b) => (a.average ?? 0) - (b.average ?? 0);
+                fieldSelector = (position) => position.average;
                 break;
             case "lastPrice":
-                comparer = (a, b) => (a.lastPrice ?? 0) - (b.lastPrice ?? 0);
+                fieldSelector = (position) => position.lastPrice;
                 break;
             case "cost":
-                comparer = (a, b) => {
-                    const compareByZero = nonZeroFirst(a, b);
-                    if (compareByZero != 0) { return compareByZero; }
-                    return (a.count ?? 0) * (a.lastPrice ?? 0) - (b.count ?? 0) * (b.lastPrice ?? 0)
-                };
+                fieldSelector = (position) => position.lastPrice ? position.count * position.lastPrice : undefined;
                 break;
             case "expected":
-                comparer = (a, b) => {
-                    const compareByZero = nonZeroFirst(a, b);
-                    if (compareByZero != 0) { return compareByZero; }
-                    return (a.expected ?? 0) - (b.expected ?? 0)
-                };
+                fieldSelector = (position) => position.expected ? position.expected : undefined;
                 break;
             case "fixed":
-                comparer = (a, b) => {
-                    const compareByZero = nonZeroFirst(a, b);
-                    if (compareByZero != 0) { return compareByZero; }
-                    return (a.fixedPnL ?? 0) - (b.fixedPnL ?? 0)
-                };
+                fieldSelector = (position) => position.fixedPnL ? position.fixedPnL : undefined;
                 break;
             case "change":
                 // TODO: добавить сортировку по изменению цены
-                break;
+            default:
+                return withAsc(defaultComparer);
         }
 
-        const comparerWithAsk = withAsc(comparer);
-        const comparerWithNull = withNull(comparerWithAsk);
-        return comparerWithNull;
+        /** @type {(asc: boolean) => (a: Position, b: Position) => number}  */
+        const comparer = (asc) => (p1, p2) => {
+            const a = fieldSelector(p1);
+            const b = fieldSelector(p2);
+            
+            if (a == undefined && b != undefined) { return 1; }
+            if (a != undefined && b == undefined) { return -1; }
+            if (a == undefined && b == undefined) { return 0; }
+
+            return asc ? a - b : b - a;
+        }
+
+        return comparer(this.settings.sorting.ascending);
     }
 
     /**
