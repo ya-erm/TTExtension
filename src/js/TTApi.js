@@ -1,3 +1,4 @@
+// @ts-check
 import { Portfolio } from "./portfolio.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
 
@@ -5,14 +6,21 @@ const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
 // https://tinkoffcreditsystems.github.io/invest-openapi/swagger-ui/
 
+/** @typedef {import('./storage/operationsRepository.js').Operation} Operation */
+/** @typedef {import('./storage/instrumentsRepository.js').Instrument} Instrument */
+
 const portfolios = JSON.parse(localStorage.getItem('portfolios')) || [];
-portfolios.forEach(portfolio => portfolio.__proto__ = Portfolio.prototype);
+portfolios.forEach(portfolio => {
+    portfolio.__proto__ = Portfolio.prototype;
+    portfolio.fillMissingFields();
+});
 
 export const TTApi = {
     token: localStorage.getItem("token"),
 
+    /**@type {Object<string, number>} */
     currencyRates: {},
-    instruments: JSON.parse(localStorage.getItem('instruments')) || [],
+    /** @type {Array<Portfolio>} */
     portfolios,
 
     loadAccounts,
@@ -32,6 +40,7 @@ export const TTApi = {
     httpGet,
 };
 
+// @ts-ignore
 window.TTApi = TTApi;
 
 /**
@@ -63,22 +72,37 @@ async function httpGet(path) {
     } else {
         console.log(`GET ${path}\n`, response.statusText);
         const error = new Error(response.statusText);
+        // @ts-ignore
         error.code = response.status;
         throw error;
     }
 }
 
+/** 
+ * @typedef UserAccount
+ * @property {string} brokerAccountId - идентификатор счёта
+ * @property {string} brokerAccountType - тип счёта (Tinkoff, TinkoffIis)
+ */
+
 /**
  * Загрузить список доступных счётов
+ * @returns {Promise<UserAccount[]>}
  */
 async function loadAccounts() {
     const payload = await httpGet("/user/accounts");
     return payload.accounts;
 }
 
+/** 
+ * @typedef CurrencyPosition
+ * @property {string} currency - валюта
+ * @property {number} balance - баланс
+ */
+
 /**
  * Загрузить доступные денежные средства
  * @param {string} account - идентификатор счёта
+ * @returns {Promise<CurrencyPosition[]>}
  */
 async function loadCurrencies(account = undefined) {
     const payload = await httpGet("/portfolio/currencies" + (!!account ? `?brokerAccountId=${account}` : ""));
@@ -86,8 +110,23 @@ async function loadCurrencies(account = undefined) {
 }
 
 /**
+ * @typedef PortfolioPosition
+ * @property {string} figi
+ * @property {string} ticker
+ * @property {string} isin 
+ * @property {string} name
+ * @property {string} instrumentType
+ * @property {number} balance
+ * @property {number} lots
+ * @property {number?} blocked
+ * @property {{currency: string, value: number}?} expectedYield
+ * @property {{currency: string, value: number}?} averagePositionPrice
+ */
+
+/**
  * Загрузить позиции
  * @param {string} account - идентификатор счёта
+ * @returns {Promise<PortfolioPosition[]>}
  */
 async function loadPortfolio(account = undefined) {
     const payload = await httpGet("/portfolio" + (!!account ? `?brokerAccountId=${account}` : ""));
@@ -98,6 +137,7 @@ async function loadPortfolio(account = undefined) {
  * Загрузить операции
  * @param {string} figi - идентификатор
  * @param {string} account - идентификатор счёта
+ * @returns {Promise<Operation[]>}
  */
 async function loadOperationsByFigi(figi, account = undefined) {
     const fromDate = encodeURIComponent('2000-01-01T00:00:00Z');
@@ -111,6 +151,7 @@ async function loadOperationsByFigi(figi, account = undefined) {
 /**
  * Загрузить инструмент
  * @param {string} figi - идентификатор
+ * @returns {Promise<Instrument>}
  */
 async function loadInstrumentByFigi(figi) {
     const instrument = await httpGet(`/market/search/by-figi?figi=${figi}`);
@@ -121,6 +162,7 @@ async function loadInstrumentByFigi(figi) {
 /**
  * Загрузить инструмент
  * @param {string} ticker - идентификатор
+ * @returns {Promise<Instrument>}
  */
 async function loadInstrumentByTicker(ticker) {
     const payload = await httpGet(`/market/search/by-ticker?ticker=${ticker}`);
@@ -133,11 +175,24 @@ async function loadInstrumentByTicker(ticker) {
 }
 
 /**
+ * @typedef Candle
+ * @property {string} figi - идентификатор FIGI
+ * @property {string} interval - интервал
+ * @property {number} o - open
+ * @property {number} c - close
+ * @property {number} h - high
+ * @property {number} l - low
+ * @property {number} v - volume
+ * @property {string} time
+ */
+
+/**
  * Загрузить свечи
- * @param {string} figi - идентификатор
+ * @param {string} figi - идентификатор FIGI
  * @param {Date} from 
  * @param {Date} to 
  * @param {string} interval - интервал 1min, 2min, 3min, 5min, 10min, 15min, 30min, hour, day, week, month
+ * @returns {Promise<Candle[]>}
  */
 async function loadCandles(figi, from, to, interval) {
     const fromDate = encodeURIComponent(from.toISOString());
@@ -148,8 +203,30 @@ async function loadCandles(figi, from, to, interval) {
 }
 
 /**
+ * @typedef Orderbook
+ * @property {string} figi - идентификатор FIGI
+ * @property {number} depth - глубина стакана
+ * @property {OrderbookItem[]} bids
+ * @property {OrderbookItem[]} asks 
+ * @property {string} tradeStatus - статус торгов
+ * @property {number} minPriceIncrement - шаг цены
+ * @property {number?} faceValue - номинал для облигаций
+ * @property {number?} lastPrice - цена последней  сделки
+ * @property {number?} closePrice - цена закрытия
+ * @property {number?} limitUp - верхняя граница цены
+ * @property {number?} limitDown - нижняя граница цены
+ */
+
+/**
+ * @typedef OrderbookItem
+ * @property {number} price - цена
+ * @property {number} quantity - количество
+ */
+
+/**
  * Загрузить стакан
- * @param {string} figi - идентификатор
+ * @param {string} figi - идентификатор FIGI
+ * @returns {Promise<Orderbook>}
  */
 async function loadOrderbook(figi) {
     const orderbook = await httpGet(`/market/orderbook?figi=${figi}&depth=${1}`);
@@ -158,7 +235,8 @@ async function loadOrderbook(figi) {
 
 /**
  * Загрузить стакан
- * @param {string} ticker - идентификатор
+ * @param {string} ticker - тикер
+ * @returns {Promise<Orderbook>}
  */
 async function loadOrderbookByTicker(ticker) {
     const instrument = await loadInstrumentByTicker(ticker);
@@ -171,7 +249,8 @@ async function loadOrderbookByTicker(ticker) {
 
 /**
  * Найти инструмент
- * @param {string} figi - идентификатор
+ * @param {string} figi - идентификатор FIGI
+ * @returns {Promise<Instrument>}
  */
 async function findInstrumentByFigi(figi) {
     let instrument = await instrumentsRepository.getOneByFigi(figi);
@@ -184,10 +263,11 @@ async function findInstrumentByFigi(figi) {
 
 /**
  * Найти свечи в кэше
- * @param {string} figi - идентификатор
+ * @param {string} figi - идентификатор FIGI
  * @param {Date} from 
  * @param {Date} to 
  * @param {string} interval 
+ * @returns {Promise<Candle[]>}
  */
 async function findCandles(figi, from, to, interval) {
     const instrument = await instrumentsRepository.getOneByFigi(figi);
@@ -200,7 +280,7 @@ async function findCandles(figi, from, to, interval) {
 /**
  * Сохранить информацию о свечах
  * @param {string} figi - идентификатор
- * @param {array} candles - свечи
+ * @param {Array<Candle>} candles - свечи
  */
 async function saveCandles(figi, candles) {
     if (candles.length == 0) { return; }
@@ -219,6 +299,7 @@ async function saveCandles(figi, candles) {
 /**
  * Получить текущий курс валюты в рублях
  * @param {string} currency Валюта (USD, EUR)
+ * @returns {Promise<number>}
  */
 async function getCurrencyRate(currency) {
     let currencyRate = TTApi.currencyRates[currency];

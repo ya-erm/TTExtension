@@ -1,3 +1,4 @@
+// @ts-check
 import { useReadTransaction, useWriteTransaction } from './database.js'
 
 /** 
@@ -25,7 +26,7 @@ export class Repository {
 
     /**
      * Сохранить список элементов в БД
-     * @param {Array<T>} items - список элементов
+     * @param {T[]} items - список элементов
      * @returns {Promise<void>}
      */
     async putMany(items) {
@@ -47,7 +48,7 @@ export class Repository {
 
     /**
      * Получить все элементы хранилища
-     * @returns {Promise<Array<T>>}
+     * @returns {Promise<T[]>}
      */
     async getAll() {
         return await useReadTransaction(this.dbParams, objectStore => objectStore.getAll());

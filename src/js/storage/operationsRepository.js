@@ -1,3 +1,4 @@
+// @ts-check
 import { useReadTransaction, useReadTransactionMany } from './database.js';
 import { Repository } from './repository.js';
 
@@ -9,12 +10,12 @@ import { Repository } from './repository.js';
  * @property {string} operationType - тип операции, например "Buy"
  * @property {string} currency - валюта инструмента (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY)
  * @property {number} payment - сумма платежа, с учётом знака -200.42
- * @property {string?} figi - идентификатор инструмента FIGI 
- * @property {string?} instrumentType - тип инструмента "Stock"
+ * @property {string?} figi - идентификатор инструмента FIGI
+ * @property {string?} instrumentType - тип инструмента (Stock, Currency, Bond, Etf)
  * @property {number?} price - стоимость одного лота, например 100.21
  * @property {number?} quantity - количество лотов в заявке
  * @property {number?} quantityExecuted - количество исполненных лотов
- * @property {Object?} commission - комиссия, например {currency: "USD", value: -0.07}
+ * @property {{currency: string, value: number}?} commission - комиссия, например {currency: "USD", value: -0.07}
  * @property {Array?} trades - массив биржевых сделок
  * Дополнительные свойства:
  * @property {string} account - идентификатор счёта
@@ -64,7 +65,7 @@ class OperationsRepository extends Repository {
     /**
      * Получить все операции для указанного инструмента
      * @param {string} figi - идентификатор инструмента
-     * @returns {Promise<Array<Operation>>}
+     * @returns {Promise<Operation[]>}
      */
     async getAllByFigi(figi) {
         return await useReadTransaction(this.dbParams, objectStore => objectStore.index("accountFigiIndex").getAll([this.account, figi]));
@@ -73,7 +74,7 @@ class OperationsRepository extends Repository {
     /**
      * Получить все операции указанного типа
      * @param {string} type - тип операции
-     * @returns {Promise<Array<Operation>>}
+     * @returns {Promise<Operation[]>}
      */
     async getAllByType(type) {
         return await useReadTransaction(this.dbParams, objectStore => objectStore.index("accountTypeIndex").getAll([this.account, type]));
@@ -81,24 +82,24 @@ class OperationsRepository extends Repository {
 
     /**
      * Получить все операции указанных типов
-     * @param {Array<string>} types - массив типов операций
-     * @returns {Promise<Array<Operation>>}
+     * @param {string[]} types - массив типов операций
+     * @returns {Promise<Operation[]>}
      */
     async getAllByTypes(types) {
-        /** @type {Array<Array<Operation>>} */
+        /** @type {Operation[][]} */
         const results = await useReadTransactionMany(this.dbParams, objectStore =>
             types.map(type =>
                 objectStore.index("accountTypeIndex").getAll([this.account, type])
             )
         );
-        /** @type {Array<Operation>} */
+        /** @type {Operation[]} */ // @ts-ignore
         return results.flat();
     }
 
     /**
      * @override
      * Получить все элементы хранилища
-     * @returns {Promise<Array<Operation>>}
+     * @returns {Promise<Operation[]>}
      */
     async getAll() {
         return await useReadTransaction(this.dbParams, objectStore => objectStore.index("accountIndex").getAll(this.account));

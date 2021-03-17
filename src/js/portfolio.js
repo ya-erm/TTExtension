@@ -1,19 +1,79 @@
-import { processOperation } from "./calculate.js";
+// @ts-check
+import { calcPriceChange, calcPriceChangePercents, processOperation } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { TTApi } from "./TTApi.js";
 
+/**
+ * @typedef PortfolioFilter
+ * @property {Object<string, boolean>} currencies
+ * @property {{zero: boolean, nonZero: boolean}} zeroPositions
+ */
+
+/**
+ * @typedef PortfolioSorting
+ * @property {string?} field - поле сортировки
+ * @property {boolean} ascending - true, если сортировка по возрастанию
+ */
+
+/**
+ * @typedef PortfolioSettings
+ * @property {string} priceChangeUnit - переключатель отображения изменения цены за день (Percents, Absolute)
+ * @property {string} expectedUnit - переключатель отображения ожидаемой прибыли (Percents, Absolute)
+ * @property {string} allDayPeriod - переключатель отображения прибыли (All, Day)
+ * @property {PortfolioFilter?} filter - параметры фильтрации
+ * @property {PortfolioSorting?} sorting - параметры сортировки
+ */
+
+/** 
+ * @class Portfolio
+ */
 export class Portfolio {
+    /**
+     * @constructor
+     * @param {string} title - название портфеля
+     * @param {string} id - идентификатор портфеля
+     */
     constructor(title, id) {
+        /** @type {string} идентификатор портфеля */
         this.id = id;
+
+        /** @type {string} название портфеля */
         this.title = title;
+
+        /** @type {string?} идентификатор счёта */
         this.account = undefined;
+
+        /** @type {Position[]} словарь сделок*/
         this.positions = [];
+
+        /** @type {Object<string, Fill[]>} список позиций */
         this.fills = {};
-        this.allDayPeriod = "All"; // All | Day
-        this.priceChangeUnit = "Percents"; // Percents | Absolute
+
+        /** @type {PortfolioSettings} настройки портфеля */
+        this.settings = undefined;
+
+        this.fillMissingFields();
+    }
+
+    /**
+     * Заполнить недостающие поля
+     */
+    fillMissingFields() {
+        if (this.settings == undefined) {
+            this.settings = {
+                allDayPeriod: "All",
+                priceChangeUnit: "Percents",
+                expectedUnit: "Absolute",
+                filter: undefined,
+                sorting: {
+                    field: undefined,
+                    ascending: true,
+                }
+            }
+        }
     }
 
     /**
@@ -56,7 +116,7 @@ export class Portfolio {
 
     /**
      * Обновить позиции
-     * @param {array} items - список позиций
+     * @param {import("./TTApi.js").PortfolioPosition[]} items - список позиций
      */
     updatePortfolio(items) {
         const now = new Date();
@@ -109,72 +169,161 @@ export class Portfolio {
      * Отсортировать позиции
      */
     sortPositions() {
-        this.positions.sort(this.comparePositions);
+        const comparer = this.getComparer()
+        this.positions.sort(comparer);
     }
 
     /**
-     * Сравнить две позиции
+     * Получить компаратор для сравнения двух позиций
+     * @returns {(a: Position, b: Position) => number}
      */
-    comparePositions(a, b) {
-        if (a == undefined && b != undefined) { return 1; }
-        if (a != undefined && b == undefined) { return -1; }
-        if (a == undefined && b == undefined) { return 0; }
-        // Сравнение по типу инструмента
-        let compareByType = a.instrumentType.localeCompare(b.instrumentType);
-        if (compareByType != 0) { return compareByType; }
-        // Сравнение по количеству (zero/non-zero)
-        if (a.count == 0 && b.count != 0) { return 1 };
-        if (b.count == 0 && a.count != 0) { return -1 };
-        // Сравнение по тикеру
-        return a.ticker.localeCompare(b.ticker);
+    getComparer() {
+        /**
+        * Сравнение с undefined
+        * @param {(a: Position, b: Position) => number} comparer
+        * @returns {(a: Position, b: Position) => number}
+        */
+        const withNull = (comparer) => {
+            return (a, b) => {
+                if (a == undefined && b != undefined) { return 1; }
+                if (a != undefined && b == undefined) { return -1; }
+                if (a == undefined && b == undefined) { return 0; }
+                return comparer(a, b);
+            }
+        };
+
+        /**
+        * С учётом сортировки
+        * @param {(a: Position, b: Position) => number} comparer
+        * @returns {(a: Position, b: Position) => number}
+        */
+        const withAsc = (comparer) => {
+            return (this.settings.sorting?.ascending ?? true)
+                ? (a, b) => comparer(a, b)
+                : (a, b) => comparer(b, a);
+        };
+
+        /** @type {(a: Position, b: Position) => number}  */
+        let defaultComparer = (a, b) => {
+            // Сравнение по типу инструмента
+            let compareByType = a.instrumentType.localeCompare(b.instrumentType);
+            if (compareByType != 0) { return compareByType; }
+            // Сравнение по количеству (zero/non-zero)
+            if (a.count == 0 && b.count != 0) { return 1 };
+            if (b.count == 0 && a.count != 0) { return -1 };
+            // Сравнение по тикеру
+            return a.ticker.localeCompare(b.ticker);
+        }
+
+        /** @type {(position: Position) => number} Селектор */
+        let fieldSelector = (_) => undefined;
+
+        const sort = this.settings.sorting.field ?? "default";
+        switch (sort) {
+            case "ticker":
+                return withAsc((a, b) => a.ticker.localeCompare(b.ticker));
+            case "count":
+                fieldSelector = (position) => position.count;
+                break;
+            case "average":
+                fieldSelector = (position) => position.average;
+                break;
+            case "lastPrice":
+                fieldSelector = (position) => position.lastPrice;
+                break;
+            case "cost":
+                fieldSelector = (position) => position.lastPrice ? position.count * position.lastPrice : undefined;
+                break;
+            case "expected":
+                fieldSelector = (position) => position.expected ? position.expected : undefined;
+                break;
+            case "fixed":
+                fieldSelector = (position) => position.fixedPnL ? position.fixedPnL : undefined;
+                break;
+            case "change":
+                fieldSelector =
+                    this.settings.priceChangeUnit == "Percents"
+                        ? (p) => {
+                            if (p.previousDayPrice && p.lastPrice) {
+                                const change = calcPriceChangePercents(p.previousDayPrice, p.lastPrice);
+                                return change ? change : undefined;
+                            }
+                            return undefined;
+                        }
+                        : (p) => {
+                            if (p.previousDayPrice && p.lastPrice) {
+                                const change = calcPriceChange(p.previousDayPrice, p.lastPrice);
+                                return Math.abs(change) < 0.01 ? undefined : change;
+                            }
+                            return undefined;
+                        }
+                break;
+            default:
+                return withAsc(defaultComparer);
+        }
+
+        /** @type {(asc: boolean) => (a: Position, b: Position) => number}  */
+        const comparer = (asc) => (p1, p2) => {
+            const a = fieldSelector(p1);
+            const b = fieldSelector(p2);
+
+            if (a == undefined && b != undefined) { return 1; }
+            if (a != undefined && b == undefined) { return -1; }
+            if (a == undefined && b == undefined) { return 0; }
+
+            return asc ? a - b : b - a;
+        }
+
+        return comparer(this.settings.sorting.ascending);
     }
 
     /**
      * Обновить валютные позиции
-     * @param {array} items 
+     * @param {Array<import("./TTApi.js").CurrencyPosition>} items 
      */
     updateCurrencies(items) {
         items.forEach(item => {
-            if (item.balance == 0) { return; }
+            let name, figi, ticker, lastPrice, average;
             switch (item.currency) {
                 case "USD":
-                    item.name = "Евро";
-                    item.figi = "BBG0013HGFT4";
-                    item.ticker = "USD000UTSTOM";
+                    name = "Евро";
+                    figi = "BBG0013HGFT4";
+                    ticker = "USD000UTSTOM";
                     break;
                 case "EUR":
-                    item.name = "Доллар США";
-                    item.figi = "BBG0013HJJ31";
-                    item.ticker = "EUR_RUB__TOM";
+                    name = "Доллар США";
+                    figi = "BBG0013HJJ31";
+                    ticker = "EUR_RUB__TOM";
                     break;
                 case "RUB":
-                    item.name = "Рубли РФ";
-                    item.figi = item.currency;
-                    item.ticker = item.currency;
-                    item.lastPrice = 1;
-                    item.average = 1;
+                    name = "Рубли РФ";
+                    figi = item.currency;
+                    ticker = item.currency;
+                    lastPrice = 1;
+                    average = 1;
                     break;
                 default:
-                    item.name = item.currency;
-                    item.figi = item.currency;
-                    item.ticker = item.currency;
+                    name = item.currency;
+                    figi = item.currency;
+                    ticker = item.currency;
                     break;
             }
-            let position = this.positions.find(_ => _.instrumentType == "Currency" && _.figi == item.figi);
+            let position = this.positions.find(_ => _.instrumentType == "Currency" && _.figi == figi);
             if (!position) {
-                position = {
-                    portfolioId: this.id,
-                    ticker: item.ticker,
-                    name: item.name,
-                    figi: item.figi,
-                    count: item.balance,
+                if (item.balance == 0) { return; }
+                position = new Position(this.id, {
+                    name,
+                    figi,
+                    ticker,
+                    isin: undefined,
                     instrumentType: "Currency",
-                    currency: item.currency,
-                    lastPrice: item.lastPrice,
-                    average: item.average,
-                    needCalc: false,
-                };
-                position.__proto__ = Position.prototype;
+                    balance: item.balance,
+                    lots: item.balance,
+                    blocked: undefined,
+                    expectedYield: undefined,
+                    averagePositionPrice: undefined,
+                });
+                position.currency = item.currency;
                 this.positions.push(position);
             }
             if (position.count !== item.balance) {
@@ -209,27 +358,28 @@ export class Portfolio {
      */
     async findPosition(figi) {
         let position = this.positions.find(_ => _.figi == figi);
-
         if (!position) {
             const item = await TTApi.findInstrumentByFigi(figi);
-            position = {
+            position = new Position(this.id, {
                 ticker: item.ticker,
                 name: item.name,
                 figi: item.figi,
                 isin: item.isin,
-                count: 0,
                 instrumentType: item.type,
-                currency: item.currency,
-                portfolioId: this.id,
-            };
-            position.__proto__ = Position.prototype;
+                balance: 0,
+                lots: 0,
+                blocked: undefined,
+                expectedYield: undefined,
+                averagePositionPrice: undefined,
+            });
+            position.currency = item.currency;
         }
         return position;
     }
 
     /**
      * Удалить позицию из списка позиций
-     * @param {object} position - позиция
+     * @param {Position} position - позиция
      */
     removePosition(position) {
         if (position.count != 0) {
@@ -248,20 +398,20 @@ export class Portfolio {
 
     /**
      * Проверить позицию на соответствие фильтру
-     * @param {object} position - позиция
+     * @param {Position} position - позиция
      * @returns {boolean} true, если позиция соответствует фильтру
      */
     filterPosition(position) {
-        if (this.filter == undefined) { return true; }
+        if (this.settings.filter == undefined) { return true; }
         // Filter by currency
-        if (this.filter?.currencies && this.filter.currencies[position.currency.toLowerCase()] == false) {
+        if (this.settings.filter?.currencies && this.settings.filter.currencies[position.currency.toLowerCase()] == false) {
             return false;
         }
         // Filter by zero/non-zero
-        if (this.filter?.zeroPositions?.zero == false && position.count == 0) {
+        if (this.settings.filter?.zeroPositions?.zero == false && position.count == 0) {
             return false;
         }
-        if (this.filter?.zeroPositions?.nonZero == false && position.count != 0) {
+        if (this.settings.filter?.zeroPositions?.nonZero == false && position.count != 0) {
             return false;
         }
         return true;
@@ -312,8 +462,8 @@ export class Portfolio {
 
     /**
      * Обновить список сделок и просчитать позиции
-     * @param {object} position - позиция
-     * @param {array} operations - список операций
+     * @param {Position} position - позиция
+     * @param {Array<import("./TTApi.js").Operation>} operations - список операций
      */
     updateFills(position, operations) {
         let created = 0;
@@ -327,7 +477,7 @@ export class Portfolio {
 
         operations
             .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             .forEach(item => {
                 let fill = fills.find(_ => _.id == item.id);
                 if (!fill) {

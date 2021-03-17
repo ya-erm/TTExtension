@@ -1,24 +1,67 @@
+// @ts-check
+/**
+ * @class Position
+ */
 export class Position {
+    /**
+     * @constructor
+     * @param {string} portfolioId 
+     * @param {import("./TTApi").PortfolioPosition} item 
+     */
     constructor(portfolioId, item) {
+        /** @type {string} короткий идентификатор */
         this.ticker = item.ticker;
+
+        /** @type {string} полное название актива */
         this.name = item.name;
+
+        /** @type {string} идентификатор FIGI (Financial Instrument Global Identifier) */
         this.figi = item.figi;
+
+        /** @type {string} идентификатор ISIN (International Securities Identification Number) */
         this.isin = item.isin;
-        this.count = item.balance;
+        
+        /** @type {string} тип (Stock, Currency, Bond, Etf) */
         this.instrumentType = item.instrumentType;
-        this.average = item.averagePositionPrice?.value;
-        this.expected = item.expectedYield?.value;
+        
+        /** @type {string} валюта (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY) */
         this.currency = item.averagePositionPrice?.currency || item.expectedYield?.currency;
+        
+        /** @type {number} количество */
+        this.count = item.balance;
+        
+        /** @type {number?} средняя цена */
+        this.average = item.averagePositionPrice?.value;
+        
+        /** @type {number?} ожидаемая (незафиксированная) прибыль или убыток */
+        this.expected = item.expectedYield?.value;
+        
+        /** @type {number} зафиксированная прибыль или убыток */
+        this.fixedPnL = 0;
+
+        /** @type {number?} текущая цена (последняя известная цена) */
         this.lastPrice = item.expectedYield?.value / item.balance + item.averagePositionPrice?.value;
 
-        this.portfolioId = portfolioId;
+        /** @type {Date?} дата последнего обновления цены */
         this.lastPriceUpdated = new Date();
+        
+        /** @type {string} идентификатор портфеля */
+        this.portfolioId = portfolioId;
+
+        /** @type {boolean} true, если требуется пересчёт позиции */
         this.needCalc = true;
+
+        /** @type {number?} рассчитанное по сделкам количество */
+        this.calculatedCount = undefined;
+
+        /** @type {number?} цена инструмента на момент окончания предыдущего дня */
+        this.previousDayPrice = undefined;
     }
 }
 
 /**
  * Обновить позицию
+ * @param {Position} position - позиция
  * @param {number} average - средняя цена
  * @param {number} fixedPnL - зафиксированную прибыль
  */
