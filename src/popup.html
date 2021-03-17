@@ -92,7 +92,10 @@
                         <tr>
                             <th>
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span>Asset</span>
+                                    <div class="sort-positions-button" data-value="ticker">
+                                        <i class="d-none mr-1">↓</i>
+                                        <span>Asset</span>
+                                    </div>
                                     <div>
                                         <button class="btn btn-xs btn-icon btn-dark" data-toggle="modal"
                                             data-target="#add-position-modal">
@@ -105,20 +108,51 @@
                                     </div>
                                 </div>
                             </th>
-                            <th class="text-right price-change-unit-switch cursor-pointer" title="Daily price change">
-                                Change
+                            <th class="text-right" title="Daily price change">
+                                <div class="sort-positions-button" data-value="change">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Chg </span>
+                                </div>
+                                <span class="price-change-unit-switch cursor-pointer"
+                                    title="Switch daily price change to % or currencies">$</span>
                             </th>
-                            <th class="text-right">Count</th>
-                            <th class="text-right cursor-help" title="Average price">Average</th>
-                            <th class="text-right cursor-help" title="Last price">Price</th>
-                            <th class="text-right cursor-help" title="Cost = Count × Price">Cost</th>
+                            <th class="text-right" title="Quantity">
+                                <div class="sort-positions-button" data-value="count">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Qnt</span>
+                                </div>
+                            </th>
+                            <th class="text-right cursor-help" title="Average price">
+                                <div class="sort-positions-button" data-value="average">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Average</span>
+                                </div>
+                            </th>
+                            <th class="text-right cursor-help" title="Last price">
+                                <div class="sort-positions-button" data-value="lastPrice">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Price</span>
+                                </div>
+                            </th>
+                            <th class="text-right cursor-help" title="Cost = Count × Price">
+                                <div class="sort-positions-button" data-value="cost">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Cost</span>
+                                </div>
+                            </th>
                             <th class="text-right cursor-help" title="Expected Profit or Loss">
-                                <span>Expected </span>
+                                <div class="sort-positions-button" data-value="expected">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Expected </span>
+                                </div>
                                 <span class="portfolio-expected-unit-switch cursor-pointer"
                                     title="Switch expected P&L to % or currencies">$</span>
                             </th>
                             <th class="text-right cursor-help" title="Fixed Profit or Loss">
-                                <span>Fixed </span>
+                                <div class="sort-positions-button" data-value="fixed">
+                                    <i class="d-none mr-1">↓</i>
+                                    <span>Fixed </span>
+                                </div>
                                 <span class="portfolio-all-day-switch cursor-pointer"
                                     title="Switch display P&L period 'All time' or 'Today'">All</span>
                             </th>
@@ -163,7 +197,7 @@
                     <tbody class="positions-bond"></tbody>
                     <tbody class="positions-etf"></tbody>
                     <tbody class="positions-currency"></tbody>
-                    <tbody class="positions-summary-row"></tbody>
+                    <tfoot class="positions-summary-row tfoot-sticky"></tfoot>
                 </table>
             </div>
         </template>
@@ -263,6 +297,14 @@
         <!--Money transactions-->
         <template id="tab-pane-money-template">
             <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
+                <div class="loading-container d-none">
+                    <span class="d-flex justify-content-center w-100">
+                        <div class="spinner-border" role="status">
+                            <span class="sr-only"></span>
+                        </div>
+                        <label class="ml-2">Updating...</label>
+                    </span>
+                </div>
                 <table class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
                     <thead class="thead-sticky">
                         <tr>
@@ -284,14 +326,6 @@
                     <tbody class="money-summary"></tbody>
                     <tbody class="money-detailed"></tbody>
                 </table>
-                <div class="loading-container d-none">
-                    <span class="d-flex justify-content-center w-100">
-                        <div class="spinner-border" role="status">
-                            <span class="sr-only"></span>
-                        </div>
-                        <label class="ml-2">Loading...</label>
-                    </span>
-                </div>
             </div>
         </template>
         <template id="money-row-template">

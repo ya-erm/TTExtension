@@ -40,12 +40,14 @@
     top: 1rem;
 } 
 
-.portfolio-all-day-switch {
-    text-decoration: underline;
-    font-weight: 400;
+.sort-positions-button {
+    display: inline-flex;
+    cursor: pointer;
 }
 
-.portfolio-expected-unit-switch {
+.price-change-unit-switch,
+.portfolio-expected-unit-switch,
+.portfolio-all-day-switch {
     text-decoration: underline;
     font-weight: 400;
 }
@@ -181,13 +183,22 @@
     cursor: help;
 }
 
-.thead-sticky th {
+.thead-sticky th,
+.tfoot-sticky td {
     position: -webkit-sticky;
     position: sticky;
     z-index: 10;
-    top: 0;
     color: var(--white);
     background-color: var(--dark);
+    box-shadow: 0 0 0 0.5px #454d55;
+}
+
+.thead-sticky th {
+    top: 0;
+}
+
+.tfoot-sticky td {
+    bottom: 0;
 }
 
 .link {
@@ -196,4 +207,8 @@
 
 .link:hover {
     text-decoration: underline;
+}
+
+.loading-container {
+    margin: 1rem;
 }

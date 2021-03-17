@@ -1,3 +1,4 @@
+// @ts-check
 import { TTApi } from "./TTApi.js";
 
 /**
@@ -8,14 +9,14 @@ import { TTApi } from "./TTApi.js";
 export function getCurrencyRate(from, to) {
     if (from == to) { return 1.0 }
 
-    const usdToRub = TTApi.currencyRates["USD"] || TTApi.getCurrencyRate("USD"); // Доллар США
+    const usdToRub = TTApi.currencyRates["USD"]; // Доллар США
     if (from == "USD" && to == "RUB") {
         return usdToRub;
     } else if (from == "RUB" && to == "USD") {
         return 1.0 / usdToRub;
     }
 
-    const eurToRub = TTApi.currencyRates["EUR"] || TTApi.getCurrencyRate("EUR"); // Евро
+    const eurToRub = TTApi.currencyRates["EUR"]; // Евро
     if (from == "EUR" && to == "RUB") {
         return eurToRub;
     } else if (from == "RUB" && to == "EUR") {
@@ -44,7 +45,7 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     }
     const toDate = new Date(previousTradingDay.getTime() + 8 * 60 * 60000); // Add 8 hours
     // Ищем информацию о свечах в кэше
-    let candles = TTApi.findCandles(figi, previousTradingDay, toDate, "hour");
+    let candles = await TTApi.findCandles(figi, previousTradingDay, toDate, "hour");
     if (candles.length == 0) {
         // Если не нашли, загружаем из API
         candles = await TTApi.loadCandles(figi, previousTradingDay, toDate, "hour");
@@ -55,7 +56,27 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     }
 }
 
-window.getPreviousDayClosePrice = getPreviousDayClosePrice;
+/**
+ * Рассчитать изменение цены актива в процентах
+ * @param {number} previousDayPrice 
+ * @param {number} currentPrice 
+ */
+export function calcPriceChangePercents(previousDayPrice, currentPrice) {
+    const change = 100 * currentPrice / previousDayPrice - 100;
+    if (Math.abs(change) < 0.01) { return 0; }
+    return change;
+}
+
+/**
+ * Рассчитать изменение цены 
+ * @param {number} previousDayPrice 
+ * @param {number} currentPrice 
+ */
+export function calcPriceChange(previousDayPrice, currentPrice) {
+    const change = currentPrice - previousDayPrice;
+    if (Math.abs(change) < 0.01) { return 0; }
+    return change;
+}
 
 /**
  * Функция просчёта операций
