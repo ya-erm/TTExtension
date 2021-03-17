@@ -324,6 +324,8 @@ export class Portfolio {
                     averagePositionPrice: undefined,
                 });
                 position.currency = item.currency;
+                position.lastPrice = lastPrice;
+                position.average = average;
                 this.positions.push(position);
             }
             if (position.count !== item.balance) {
@@ -416,6 +418,31 @@ export class Portfolio {
         }
         return true;
     }
+
+    // #endregion
+
+    // #region Orders
+
+    /**
+     * Загрузить заявки
+     * @param {string} ticker - идентификатор
+     */
+    async loadOrdersByTicker(ticker) {
+        let figi = this.positions.find(_ => _.ticker == ticker)?.figi
+            || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
+
+        if (!figi) {
+            const item = await TTApi.loadInstrumentByTicker(ticker);
+            if (!item) {
+                throw new Error("Instrument not found");
+            }
+            figi = item.figi;
+        }
+
+        const orders = await TTApi.loadOrdersByFigi(figi, this.account);
+        return orders;
+    }
+
 
     // #endregion
 

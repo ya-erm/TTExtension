@@ -169,6 +169,15 @@
     width: 5rem;
 }
 
+.order-cancel-button {
+    min-width: calc(1.15rem + 2px);
+    color: white;
+}
+
+.order-cancel-button:hover {
+    color: gray;
+}
+
 /* Other */
 
 .inaccurate-value-text {
@@ -211,4 +220,12 @@
 
 .loading-container {
     margin: 1rem;
+}
+
+#confirm-modal .modal-dialog {
+    max-width: 300px;
+}
+
+#confirm-modal .modal-body span {
+    white-space: pre-line;
 }

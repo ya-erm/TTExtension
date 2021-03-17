@@ -1,8 +1,10 @@
 // @ts-check
 import { calcPriceChange, calcPriceChangePercents, getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
+import { showConfirm } from "./confirm.js";
 import { Fill } from "./fill.js";
 import { Portfolio } from "./portfolio.js";
 import { Position } from "./position.js";
+import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
@@ -88,11 +90,12 @@ function drawPositions(portfolio) {
             getPreviousDayClosePrice(position.figi)
                 .then(previousDayPrice => {
                     const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
+                    /** @type {HTMLElement} */
                     const cellChange = positionRow?.querySelector("td.portfolio-change span");
                     if (cellChange) {
-                        drawPriceChange(position, previousDayPrice, portfolio.priceChangeUnit, cellChange);
+                        position.previousDayPrice = previousDayPrice;
+                        drawPriceChange(position, previousDayPrice, portfolio.settings.priceChangeUnit, cellChange);
                     }
-
                 });
         }
     });
@@ -509,6 +512,10 @@ function onPositionClick(portfolio, position) {
         portfolio.loadFillsByTicker(position.ticker)
             .then((fills) => drawOperations(portfolio, position, fills));
 
+        // Загружаем активные заявки
+        portfolio.loadOrdersByTicker(position.ticker)
+            .then((orders) => drawOrders(portfolio, position, orders));
+
         // Отображаем панель торговли
         drawTradingPanel(portfolio, position);
     }
@@ -536,13 +543,13 @@ function onOperationsLinkClick() {
         // Отображаем операции из памяти
         getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter)
             .then(operations => {
-                DrawSystemOperations(portfolio, operations);
+                drawSystemOperations(portfolio, operations);
             });
 
         // Загружаем новые операции и отображаем их
         portfolio.loadOperations()
             .then((operations) => {
-                DrawSystemOperations(portfolio, operations);
+                drawSystemOperations(portfolio, operations);
                 setClassIf(loadingSpinner, "d-none", true);
             });
     }
@@ -561,20 +568,17 @@ function onPositionRemoveClick(portfolio, position) {
 
 /**
  * Отрисовка изменения цены актива
- * @param {Portfolio} portfolio
- * @param {Position} position
- * @param {number} previousDayPrice 
+ * @param {Position} position позиция
+ * @param {number} previousDayPrice цена актива за предыдущий день
+ * @param {string} priceChangeUnit единица измерения: "Percents" или "Currency"
+ * @param {HTMLElement} cellChange HTML элемент, в котором нужно отрисовать изменение цены
  */
-function drawPriceChange(portfolio, position, previousDayPrice) {
-    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
-    /** @type {HTMLElement} */
-    const cellChange = positionRow?.querySelector("td.portfolio-change span");
+function drawPriceChange(position, previousDayPrice, priceChangeUnit, cellChange) {
     if (!cellChange) { return; }
-
-    let change = portfolio.settings.priceChangeUnit == "Percents"
+    let change = priceChangeUnit == "Percents"
         ? calcPriceChangePercents(previousDayPrice, position.lastPrice)
         : calcPriceChange(previousDayPrice, position.lastPrice);
-    const unit = portfolio.settings.priceChangeUnit == "Percents" ? "%" : position.currency;
+    const unit = priceChangeUnit == "Percents" ? "%" : position.currency;
     cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
     cellChange.textContent = printMoney(change, unit, true);
     cellChange.className = getMoneyColorClass(change);
@@ -625,7 +629,7 @@ function addPortfolioSortButtonHandlers(portfolio) {
  */
 function drawOperations(portfolio, position, fills) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
-    const tbody = document.querySelector(`#${tabId} table.table-fills tbody`)
+    const tbody = document.querySelector(`#${tabId} table.table-fills tbody.fills`)
     tbody.innerHTML = "";
 
     fills.forEach((item, index) => {
@@ -697,7 +701,7 @@ function drawOperations(portfolio, position, fills) {
  * @param {Portfolio} portfolio
  * @param {import("./storage/operationsRepository.js").Operation[]} operations
  */
-async function DrawSystemOperations(portfolio, operations) {
+async function drawSystemOperations(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
         .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
@@ -834,20 +838,80 @@ async function DrawSystemOperations(portfolio, operations) {
         });
 }
 
-function drawTradingPanel(portfolio, position) {
+/**
+ * Отрисовка заявок по активу
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ * @param {Array<import("./TTApi.js").Order>} orders 
+ */
+function drawOrders(portfolio, position, orders) {
+    const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
+    const tbody = document.querySelector(`#${tabId} table.table-fills tbody.orders`)
+    tbody.innerHTML = "";
+
+    orders.forEach((item, index) => {
+        /** @type {HTMLElement} */ //@ts-ignore
+        const orderRow = document.querySelector("#fills-row-template").content.firstElementChild.cloneNode(true);
+        
+        /** @type {HTMLElement} */ //@ts-ignore
+        const deleteButton = document.querySelector("#order-cancel-button-template").content.firstElementChild.cloneNode(true);
+        
+        deleteButton.addEventListener("click", async () => {
+            try {
+                await TTApi.cancelOrder(item.orderId, portfolio.account);
+                tbody.removeChild(orderRow);
+            } catch(e) {
+                console.error(`Не удалось отменить заявку #${item.orderId}`);
+            }
+        });
+
+        const cellIndex = orderRow.querySelector("td.fills-index");
+        cellIndex.classList.add("d-flex", "align-items-center", "justify-content-center");
+        cellIndex.appendChild(deleteButton);
+
+        const cellTime = orderRow.querySelector("td.fills-time");
+        cellTime.textContent = `${item.type} order`;
+
+        const cellType = orderRow.querySelector("td.fills-type span");
+        cellType.textContent = item.operation;
+        cellType.className = item.operation === "Sell" ? "text-danger" : "text-success";
+
+        const cellPrice = orderRow.querySelector("td.fills-price");
+        cellPrice.textContent = item.price.toFixed(2);
+
+        const cellCount = orderRow.querySelector("td.fills-count");
+        cellCount.textContent = (item.operation === "Sell" ? "-" : "+") + (item.requestedLots);
+
+        const cellPayment = orderRow.querySelector("td.fills-payment");
+        cellPayment.textContent = (item.price * item.requestedLots).toFixed(2);
+
+        tbody.append(orderRow);
+    });
+}
+
+/**
+ * Отрисовать панель для торговли
+ * @param {Portfolio} portfolio 
+ * @param {Position} position 
+ */
+async function drawTradingPanel(portfolio, position) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
     const tradingPanel = document.querySelector(`#${tabId} .trading-panel`);
     const priceSpan = tradingPanel.querySelector(".trading-price");
 
+    /** @type {HTMLFormElement} */
     const formPlaceOrder = tradingPanel.querySelector(".trading-place-order form");
+    /** @type {HTMLInputElement} */
     const inputPrice = tradingPanel.querySelector(".trading-place-order-price");
+    /** @type {HTMLInputElement} */
     const inputLots = tradingPanel.querySelector(".trading-place-order-lots");
+    /** @type {HTMLElement} */
     const spanCost = tradingPanel.querySelector(".trading-place-order-cost");
 
     let pricePrecision = 2;
-    const instrument = TTApi.instruments.find(item => item.figi == position.figi);
+    const instrument = await instrumentsRepository.getOneByFigi(position.figi)
     if (instrument?.minPriceIncrement) {
-        inputPrice.setAttribute("step", instrument.minPriceIncrement);
+        inputPrice.setAttribute("step", instrument.minPriceIncrement.toString());
         pricePrecision = instrument.minPriceIncrement.toString().length - 2;
         if (pricePrecision < 2) { pricePrecision = 2; }
     }
@@ -855,37 +919,46 @@ function drawTradingPanel(portfolio, position) {
     priceSpan.textContent = printMoney(position.lastPrice, position.currency, false, pricePrecision);
     getPreviousDayClosePrice(position.figi)
         .then(previousDayPrice => {
+            /** @type {HTMLElement} */
             const spanPriceChange = tradingPanel.querySelector(".trading-price-change span");
             drawPriceChange(position, previousDayPrice, "Currency", spanPriceChange);
+            /** @type {HTMLElement} */
             const spanPriceChangePercents = tradingPanel.querySelector(".trading-price-change-percents span");
             drawPriceChange(position, previousDayPrice, "Percents", spanPriceChangePercents);
         });
 
+    const drawCost = () => {
+        spanCost.textContent = printMoney(parseFloat(inputPrice.value) * parseInt(inputLots.value), position.currency);
+    };
     ["keyup", "change", "paste"].forEach(eventName => {
-        inputPrice.addEventListener(eventName, (e) => {
-            spanCost.textContent = printMoney(e.target.value * inputLots.value, position.currency);
-        });
-        inputLots.addEventListener(eventName, (e) => {
-            spanCost.textContent = printMoney(inputPrice.value * e.target.value, position.currency);
-        });
+        inputPrice.addEventListener(eventName, drawCost);
+        inputLots.addEventListener(eventName, drawCost);
     });
     priceSpan.addEventListener("click", () => {
         inputPrice.value = position.lastPrice.toFixed(pricePrecision);
-        spanCost.textContent = printMoney(inputPrice.value * inputLots.value, position.currency);
+        drawCost();
     });
 
     formPlaceOrder.addEventListener("submit", async (e) => {
         e.preventDefault();
         const order = {
             lots: parseInt(inputLots.value),
+            //@ts-ignore
             operation: e.submitter.dataset.value,
             price: parseFloat(inputPrice.value),
         };
-        if (confirm(`Confirm to ${order.operation.toLowerCase()} ${position.ticker}?\n`
-            + `Price: ${order.price}\n` + `Lots: ${order.lots}\n` + `Cost: ${order.price * order.lots}`)) {
-            const response = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
-            console.log(response);
-        }
+
+        showConfirm(
+            `Confirm to ${order.operation.toLowerCase()} ${position.ticker}?`,
+            `Price: ${printMoney(order.price, instrument.currency)}\r\n`
+            + `Lots: ${order.lots}\r\n`
+            + `Cost: ${printMoney(order.price * order.lots, instrument.currency)}`,
+            async () => {
+                const response = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
+                console.log(response);
+                // TODO: сохранить заявку
+            }
+        );
     });
 }
 
@@ -932,6 +1005,8 @@ eraseButton.addEventListener("click", () => {
             }
         });
     document.querySelector(".portfolio-total-cost").innerHTML = "";
+    getOperationsRepository("").dropDatabase();
+    instrumentsRepository.dropDatabase();
     TTApi.eraseData();
     // Скрываем кнопку очистки хранилища
     setClassIf(eraseButton, "d-none", true);
@@ -992,7 +1067,6 @@ excludeCurrenciesFromTotalCheckbox.addEventListener("change", (e) => {
 /** @type {HTMLFormElement} */ //@ts-ignore
 const tokenForm = document.getElementById("token-form");
 
-// Обработчик сабмита формы с токеном
 tokenForm.addEventListener("submit", (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
@@ -1027,7 +1101,6 @@ addPositionInput.oninput = function () {
     addPositionError.textContent = "";
 };
 
-// Обработчик сабмита формы
 addPositionForm.addEventListener("submit", (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
@@ -1230,7 +1303,7 @@ filterOperationsForm.addEventListener("submit", async (e) => {
     const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
 
     const operations = await getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter);
-    DrawSystemOperations(portfolio, operations);
+    drawSystemOperations(portfolio, operations);
 
     //@ts-ignore
     $('#filter-operations-modal').modal('hide');

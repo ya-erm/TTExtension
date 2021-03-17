@@ -30,6 +30,8 @@ export const TTApi = {
     loadInstrumentByFigi,
     loadInstrumentByTicker,
     loadOperationsByFigi,
+    loadOrdersByFigi,
+    cancelOrder,
     findCandles,
     loadCandles,
     loadOrderbook,
@@ -39,7 +41,7 @@ export const TTApi = {
     savePortfolios,
     eraseData,
     httpGet,
-    httpPut,
+    httpPost,
 };
 
 // @ts-ignore
@@ -92,7 +94,7 @@ async function httpGet(path) {
  * @param {object} body - тело запроса
  * @returns 
  */
-async function httpPut(path, body) {
+async function httpPost(path, body) {
     const response = await fetch(apiURL + path, {
         method: 'POST',
         headers: {
@@ -108,6 +110,7 @@ async function httpPut(path, body) {
     } else {
         console.log(`POST ${path}`, body, '\n', response.statusText);
         const error = new Error(response.statusText);
+        // @ts-ignore
         error.code = response.status;
         throw error;
     }
@@ -201,6 +204,41 @@ async function loadInstrumentByTicker(ticker) {
         return instrument;
     }
     return null;
+}
+
+
+/**
+ * @typedef Order
+ * @property {string} orderId - идентификатор заявки
+ * @property {string} figi - идентификатор FIGI
+ * @property {string} operation - тип операции (Buy, Sell)
+ * @property {string} type - тип заявки (Limit, Market)
+ * @property {string} status - статус заявки (New, PartiallyFill, Fill, Cancelled, Replaced, PendingCancel, Rejected, PendingReplace, PendingNew)
+ * @property {number} requestedLots - запрашиваемое количество лотов в заявке
+ * @property {number} executedLots - количество исполненных лотов
+ * @property {number} price - цена
+ */
+
+/**
+ * Загрузить список активных заявок
+ * @param {string} figi - идентификатор FIGI
+ * @param {string} account - идентификатор счёта
+ * @returns {Promise<Order[]>}
+ */
+async function loadOrdersByFigi(figi, account) {
+    const orders = await httpGet(`/orders?figi=${figi}&brokerAccountId=${account}`);
+    return orders.filter(item => item.figi == figi);
+}
+
+/**
+ * Отменить заявку
+ * @param {string} orderId - идентификатор заявки
+ * @param {string} account - идентификатор счёта
+ * @returns 
+ */
+async function cancelOrder(orderId, account) {
+    const payload = await httpPost(`/orders/cancel?orderId=${orderId}&brokerAccountId=${account}`);
+    return payload;
 }
 
 /**
@@ -358,6 +396,6 @@ async function getCurrencyRate(currency) {
  * @returns 
  */
 async function placeLimitOrder(figi, body, account = undefined) {
-    const payload = await httpPut(`/orders/limit-order?figi=${figi}` + (!!account ? `&brokerAccountId=${account}` : ""), body);
+    const payload = await httpPost(`/orders/limit-order?figi=${figi}` + (!!account ? `&brokerAccountId=${account}` : ""), body);
     return payload;
 }
