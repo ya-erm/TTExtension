@@ -1,24 +1,37 @@
+import { setClassIf } from "./utils.js";
+
 /**
  * Отобразить модальное окно подтверждения
  * @param {string} title - заголовок
  * @param {string} text - текст
- * @param {() => void} okHandler - обработчик нажатия кнопки ОК
+ * @param {() => Promise<void>} okHandler - обработчик нажатия кнопки ОК
  * @param {() => void} cancelHandler - обработчик нажатия кнопки Cancel
  */
 export function showConfirm(title, text, okHandler, cancelHandler = undefined) {
     const modal = document.getElementById("confirm-modal");
     const header = modal.querySelector(".modal-title");
-    const body = modal.querySelector(".modal-body span");
-    const okButton = modal.querySelector("#confirm-form-ok-button");
-    const cancelButton = modal.querySelector("#confirm-form-cancel-button");
-
+    const body = modal.querySelector(".modal-body div.text");
+    const errorMessage = modal.querySelector("div.error-message");
+    const okButton = modal.querySelector("#confirm-ok-button");
+    const cancelButton = modal.querySelector("#confirm-cancel-button");
+    
     header.textContent = title;
     body.textContent = text;
+    errorMessage.textContent = "";
+    setClassIf(okButton, 'd-none', false);
 
     const onOkClick = () => {
-        okHandler();
-        okButton.removeEventListener("click", onOkClick);
-        cancelButton.removeEventListener("click", onCancelClick);
+        okHandler()
+            .then(() => {
+                okButton.removeEventListener("click", onOkClick);
+                cancelButton.removeEventListener("click", onCancelClick);
+                // @ts-ignore
+                $('#confirm-modal').modal('hide');
+            })
+            .catch((e) => {
+                errorMessage.textContent = e.message;
+                setClassIf(okButton, 'd-none', true);
+            })
     };
     const onCancelClick = () => {
         if (cancelHandler) {

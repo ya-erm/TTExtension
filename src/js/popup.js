@@ -514,7 +514,10 @@ function onPositionClick(portfolio, position) {
 
         // Загружаем активные заявки
         portfolio.loadOrdersByTicker(position.ticker)
-            .then((orders) => drawOrders(portfolio, position, orders));
+            .then((orders) => {
+                position.orders = orders;
+                drawOrders(portfolio, position);
+            });
 
         // Отображаем панель торговли
         drawTradingPanel(portfolio, position);
@@ -842,25 +845,25 @@ async function drawSystemOperations(portfolio, operations) {
  * Отрисовка заявок по активу
  * @param {Portfolio} portfolio
  * @param {Position} position
- * @param {Array<import("./TTApi.js").Order>} orders 
  */
-function drawOrders(portfolio, position, orders) {
+function drawOrders(portfolio, position) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
     const tbody = document.querySelector(`#${tabId} table.table-fills tbody.orders`)
     tbody.innerHTML = "";
 
-    orders.forEach((item, index) => {
+    const orders = position.orders.sort((a, b) => b.price - a.price);
+    orders.forEach(item => {
         /** @type {HTMLElement} */ //@ts-ignore
         const orderRow = document.querySelector("#fills-row-template").content.firstElementChild.cloneNode(true);
-        
+
         /** @type {HTMLElement} */ //@ts-ignore
         const deleteButton = document.querySelector("#order-cancel-button-template").content.firstElementChild.cloneNode(true);
-        
+
         deleteButton.addEventListener("click", async () => {
             try {
                 await TTApi.cancelOrder(item.orderId, portfolio.account);
                 tbody.removeChild(orderRow);
-            } catch(e) {
+            } catch (e) {
                 console.error(`Не удалось отменить заявку #${item.orderId}`);
             }
         });
@@ -954,9 +957,9 @@ async function drawTradingPanel(portfolio, position) {
             + `Lots: ${order.lots}\r\n`
             + `Cost: ${printMoney(order.price * order.lots, instrument.currency)}`,
             async () => {
-                const response = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
-                console.log(response);
-                // TODO: сохранить заявку
+                const item = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
+                position.orders.push(item);
+                drawOrders(portfolio, position);
             }
         );
     });

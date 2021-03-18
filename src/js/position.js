@@ -56,6 +56,9 @@ export class Position {
 
         /** @type {number?} цена инструмента на момент окончания предыдущего дня */
         this.previousDayPrice = undefined;
+
+        /** @type {import("./TTApi").Order[]} список активных заявок */
+        this.orders = [];
     }
 }
 

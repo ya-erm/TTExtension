@@ -206,7 +206,6 @@ async function loadInstrumentByTicker(ticker) {
     return null;
 }
 
-
 /**
  * @typedef Order
  * @property {string} orderId - идентификатор заявки
@@ -389,13 +388,31 @@ async function getCurrencyRate(currency) {
 }
 
 /**
+ * @typedef PlaceLimitOrderResponse
+ * @property {string} orderId - идентификатор заявки
+ * @property {string} operation - тип операции (Buy, Sell)
+ * @property {string} status - статус заявки (New, PartiallyFill, Fill, Cancelled, Replaced, PendingCancel, Rejected, PendingReplace, PendingNew)
+ * @property {number} requestedLots - запрашиваемое количество лотов в заявке
+ * @property {number} executedLots - количество исполненных лотов
+ * @property {{currency: string, value: number}?} commission - комиссия
+ * @property {string?} rejectReason - причина отказа
+ * @property {string?} message - сообщение
+ */
+
+/**
  * Создание лимитной заявки
  * @param {string} figi - идентификатор актива
- * @param {object} body - тело запроса { lots: 0, operation: "Buy", price: 0 }
+ * @param {{lots: number, operation: string, price: number}} body - тело запроса { lots: 0, operation: "Buy", price: 0 }
  * @param {string} account - идентификатор счёта
- * @returns 
+ * @returns {Promise<Order>}
  */
 async function placeLimitOrder(figi, body, account = undefined) {
+    /** @type {PlaceLimitOrderResponse} */
     const payload = await httpPost(`/orders/limit-order?figi=${figi}` + (!!account ? `&brokerAccountId=${account}` : ""), body);
-    return payload;
+    
+    if (payload.rejectReason) {
+        throw new Error(payload.message);
+    }
+
+    return { ...payload, figi, type: "Limit", price: body.price };
 }
