@@ -32,6 +32,7 @@ export function getCurrencyRate(from, to) {
  * @param {Date} date - текущая дата
  */
 export async function getPreviousDayClosePrice(figi, date = undefined) {
+    if (figi == "RUB") { return 1; }
     const now = date ?? new Date();
     const previousTradingDay = new Date(now.getTime());
     previousTradingDay.setUTCHours(15);

@@ -43,10 +43,10 @@ export function getMoneyColorClass(value) {
  */
 export function printVolume(value) {
     if (value == null || value == undefined || isNaN(value)) { return ""; }
-    if (value <= 1000) { return `${value}`; }
-    else if (value < 10_000) { return `${(value / 1_000).toFixed(2)}K`; }
-    else if (value < 100_000) { return `${(value / 1_000).toFixed(1)}K`; }
-    else if (value < 1_000_000) { return `${(value / 1_000).toFixed(0)}K`; }
+    if (Math.abs(value) <= 1000) { return `${value}`; }
+    else if (Math.abs(value) < 10_000) { return `${(value / 1_000).toFixed(2)}K`; }
+    else if (Math.abs(value) < 100_000) { return `${(value / 1_000).toFixed(1)}K`; }
+    else if (Math.abs(value) < 1_000_000) { return `${(value / 1_000).toFixed(0)}K`; }
     else { return `${(value / 1_000_000).toFixed(2)}M`; }
 }
 

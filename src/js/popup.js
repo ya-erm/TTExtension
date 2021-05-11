@@ -249,6 +249,17 @@ function addPositionRow(portfolio, position) {
 }
 
 /**
+ * Проверить, совпадают ли рассчитанные по сделкам значения с актуальными
+ * @param {Position} position - позиция
+ * @returns {Boolean}
+ */
+function isInaccurateValue(position) {
+    const calculatedCountNotEqualActual = position.calculatedCount
+        && position.calculatedCount != position.count;
+    return position.needCalc || calculatedCountNotEqualActual;
+}
+
+/**
   * Заполнить строку в таблице позиций данными
   * @param {Portfolio} portfolio - портфель
   * @param {HTMLElement} positionRow - строка таблицы
@@ -270,20 +281,20 @@ function fillPositionRow(portfolio, positionRow, position) {
         positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
     }
 
-    const calculatedCountNotEqualActual = position.calculatedCount
-        && position.calculatedCount != position.count
-        && position.instrumentType != "Currency";
-    const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
+    const inaccurateValue = isInaccurateValue(position);
+    let average = inaccurateValue ? position.average : position.calculatedAverage;
+    const count = inaccurateValue ? position.count : position.calculatedCount;
+    const expected = inaccurateValue ? position.expected : position.calculatedExpected;
 
     /** @type {HTMLElement} */
     const cellCount = positionRow.querySelector("td.portfolio-count");
-    cellCount.textContent = printVolume(position.count);
-    setClassIf(cellCount, "inaccurate-value-text", calculatedCountNotEqualActual);
-    if (calculatedCountNotEqualActual) {
+    cellCount.textContent = printVolume(count);
+    setClassIf(cellCount, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
+    if (inaccurateValue) {
         cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
             `Actual value: ${position.count}`;
-    } else if (cellCount.textContent != `${position.count}`) {
-        cellCount.title = `${position.count}`;
+    } else if (cellCount.textContent != `${count}`) {
+        cellCount.title = `${count}`;
     } else {
         cellCount.title = "";
     }
@@ -291,7 +302,6 @@ function fillPositionRow(portfolio, positionRow, position) {
     /** @type {HTMLElement} */
     const cellAverage = positionRow.querySelector("td.portfolio-average");
     cellAverage.title = "";
-    let average = position.average;
     if (position.count == 0) {
         const fills = portfolio.fills[position.ticker];
         if (fills?.length > 1) {
@@ -303,6 +313,16 @@ function fillPositionRow(portfolio, positionRow, position) {
     }
     cellAverage.textContent = printMoney(average, position.currency);
     setClassIf(cellAverage, "inaccurate-value-text", inaccurateValue || position.count == 0);
+    if (inaccurateValue) {
+        instrumentsRepository.getOneByFigi(position.figi)
+            .then(instrument => {
+                const precision = instrument?.minPriceIncrement.toString().length ?? 4 - 2
+                cellAverage.title = `Calculated by fills: ${printMoney(position.calculatedAverage, null, false, precision)}\n` +
+                    `Actual value: ${printMoney(position.average, null, false, precision)}`;
+        });
+    } else {
+        cellAverage.title = "";
+    }
 
     /** @type {HTMLElement} */
     const cellLast = positionRow.querySelector("td.portfolio-last");
@@ -315,18 +335,18 @@ function fillPositionRow(portfolio, positionRow, position) {
     cellCost.textContent = (position.count != 0)
         ? printMoney(position.count * position.lastPrice, position.currency)
         : "";
-    setClassIf(cellCost, "inaccurate-value-text", inaccurateValue);
+    setClassIf(cellCost, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     if (position.count != 0) {
         if (portfolio.settings.expectedUnit == "Percents") {
-            const expectedPercents = 100 * position.expected / (position.count * position.lastPrice);
+            const expectedPercents = 100 * expected / (count * position.lastPrice);
             cellExpected.textContent = printMoney(expectedPercents, "%", true);
         } else {
-            cellExpected.textContent = printMoney(position.expected, position.currency, true);
+            cellExpected.textContent = printMoney(expected, position.currency, true);
         }
-        cellExpected.className = getMoneyColorClass(position.expected);
-        setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
+        cellExpected.className = getMoneyColorClass(expected);
+        setClassIf(cellExpected, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
     } else {
         cellExpected.textContent = "";
     }
@@ -394,13 +414,17 @@ function addPositionSummaryRow(portfolio) {
         }
     } */
     const total = portfolio.positions.reduce((result, position) => {
+        const inaccurateValue = isInaccurateValue(position);
+        const count = inaccurateValue ? position.count : position.calculatedCount;
+        const average = inaccurateValue ? position.average : position.calculatedAverage;
+        const expected = inaccurateValue ? position.expected : position.calculatedExpected;
         result.cost[position.currency] |= 0;
         result.expected[position.currency] |= 0;
         result.fixedPnL[position.currency] |= 0;
-        result.cost[position.currency] += (position.count || 0) * (position.average || 0) + (position.expected || 0);
+        result.cost[position.currency] += (count || 0) * (average || 0) + (expected || 0);
         if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
             // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
-            result.expected[position.currency] += (position.expected || 0);
+            result.expected[position.currency] += (expected || 0);
             const fixedPnL = (portfolio.settings.allDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(portfolio, position);
             result.fixedPnL[position.currency] += (fixedPnL || 0);
         }
@@ -414,12 +438,14 @@ function addPositionSummaryRow(portfolio) {
         totalCostTitle += `${key}: ${printMoney(total.cost[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.cost[key];
     }, 0);
+    totalCostTitle = totalCostTitle.trimEnd();
 
     let totalExpectedTitle = "Total expected \n";
     const totalExpected = Object.keys(total.expected).reduce((result, key) => {
         totalExpectedTitle += `${key}: ${printMoney(total.expected[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
+    totalExpectedTitle = totalExpectedTitle.trimEnd();
 
     let totalFixedPnLTitle = (portfolio.settings.allDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
@@ -495,6 +521,7 @@ function changeSelectedCurrency(portfolio, selectedCurrency) {
  * @param {Position} position
  */
 function onPositionClick(portfolio, position) {
+    if (position.figi == "RUB") { return; }
     const ticker = position.ticker;
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(ticker)}`;
     // Если вкладка не существует
