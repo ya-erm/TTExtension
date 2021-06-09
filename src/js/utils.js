@@ -88,3 +88,15 @@ export function convertToSlug(text) {
         .replace(/ /g, '-')
         .replace(/[^\w-]+/g, '_');
 }
+
+/**
+ * 
+ * @param {Date} date 
+ */
+export function printDate(date) {
+    if (date.__proto__ != Date.prototype) {
+        date = new Date(date)
+    }
+    var options = { year: "2-digit", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" };
+    return date?.toLocaleDateString("ru-RU", options)
+}

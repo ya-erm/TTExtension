@@ -504,7 +504,8 @@ export class Portfolio {
 
         operations
             .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by order placed
+            .sort((a, b) => Fill.getLastTradeDate(a).getTime() -  Fill.getLastTradeDate(b).getTime()) // sort by last trade executed
             .forEach(item => {
                 let fill = fills.find(_ => _.id == item.id);
                 if (!fill) {

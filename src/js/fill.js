@@ -32,6 +32,9 @@ export class Fill {
         /** @type {number?} комиссия, например {currency: "USD", value: -0.07} */
         this.commission = item.commission?.value;
 
+        /** @type {Array} */
+        this.trades = item.trades
+
         // Расчётные накопительные параметры:
 
         /** @type {number?} средняя цена */
@@ -45,5 +48,16 @@ export class Fill {
 
         /** @type {number?} зафиксированная прибыль */
         this.fixedPnL = undefined;
+    }
+
+    /**
+     * @param {import("./TTApi").Operation} operation 
+     * @returns {Date}
+     */
+    static getLastTradeDate(operation) {
+        if (operation.trades?.length > 0) {
+            return new Date(operation.trades[operation.trades.length - 1].date)
+        }
+        return new Date(operation.date);
     }
 }
