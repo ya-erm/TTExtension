@@ -1,4 +1,5 @@
 // @ts-check
+import { Fill } from "./fill.js";
 import { TTApi } from "./TTApi.js";
 
 /**
@@ -82,16 +83,16 @@ export function calcPriceChange(previousDayPrice, currentPrice) {
 /**
  * Функция просчёта операций
  * @param {object} accumulated Накопленный результат
- * @param {object} operation Операция
+ * @param {Fill} fill Операция
  */
-export function processOperation(accumulated, operation) {
+export function processFill(accumulated, fill) {
     let { currentQuantity, totalFixedPnL, averagePrice, averagePriceCorrected } = accumulated;
 
-    const price = operation.price;
-    const cost = -operation.payment;
-    const quantity = operation.quantityExecuted;
-    const commission = Math.abs(operation.commission?.value) || 0;
-    const direction = -Math.sign(operation.payment)
+    const price = fill.price;
+    const cost = -fill.payment;
+    const quantity = fill.quantityExecuted;
+    const commission = Math.abs(fill.commission) || 0;
+    const direction = -Math.sign(fill.payment)
     const costCorrected = cost + commission;
 
     let sumUp = currentQuantity * (averagePrice || 0) + cost;

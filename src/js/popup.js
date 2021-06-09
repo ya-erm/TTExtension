@@ -662,10 +662,7 @@ function drawOperations(portfolio, position, fills) {
     const tbody = document.querySelector(`#${tabId} table.table-fills tbody.fills`)
     tbody.innerHTML = "";
 
-    fills
-    //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by creation
-    .sort((a, b) => Fill.getLastTradeDate(a).getTime() -  Fill.getLastTradeDate(b).getTime()) // sort by execution
-    .forEach((item, index) => {
+    fills.forEach((item, index) => {
         /** @type {HTMLElement} */ //@ts-ignore
         const fillRow = document.querySelector("#fills-row-template").content.firstElementChild.cloneNode(true);
 
@@ -674,9 +671,9 @@ function drawOperations(portfolio, position, fills) {
 
         /** @type {HTMLElement} */
         const cellTime = fillRow.querySelector("td.fills-time");
-        //cellTime.textContent = printDate(item.date);
-        cellTime.textContent = printDate(Fill.getLastTradeDate(item));
+        cellTime.textContent = printDate(Fill.getLastTradeDate(item)) ?? printDate(item.date);
         cellTime.title = "Created: " + printDate(item.date) + ",\n" + "Executed: " + printDate(Fill.getLastTradeDate(item));
+        setClassIf(cellTime, "inaccurate-value-text", !!!Fill.getLastTradeDate(item))
 
         const cellType = fillRow.querySelector("td.fills-type span");
         cellType.textContent = item.operationType == "BuyCard" ? "Buy" : item.operationType;

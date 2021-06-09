@@ -51,13 +51,12 @@ export class Fill {
     }
 
     /**
-     * @param {import("./TTApi").Operation} operation 
-     * @returns {Date}
+     * @param {Fill} fill
+     * @returns {Date?}
      */
-    static getLastTradeDate(operation) {
-        if (operation.trades?.length > 0) {
-            return new Date(operation.trades[operation.trades.length - 1].date)
+    static getLastTradeDate(fill) {
+        if (fill.trades?.length > 0) {
+            return new Date(fill.trades[fill.trades.length - 1].date)
         }
-        return new Date(operation.date);
     }
 }

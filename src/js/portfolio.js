@@ -1,5 +1,5 @@
 // @ts-check
-import { calcPriceChange, calcPriceChangePercents, processOperation } from "./calculate.js";
+import { calcPriceChange, calcPriceChangePercents, processFill } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
@@ -495,17 +495,10 @@ export class Portfolio {
     updateFills(position, operations) {
         let created = 0;
         let updated = 0;
-        const fills = this.fills[position.ticker] || [];
-
-        let currentQuantity = 0;
-        let totalFixedPnL = 0;
-        let averagePrice = 0;
-        let averagePriceCorrected = 0;
+        let fills = this.fills[position.ticker] || [];
 
         operations
             .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
-            //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by order placed
-            .sort((a, b) => Fill.getLastTradeDate(a).getTime() -  Fill.getLastTradeDate(b).getTime()) // sort by last trade executed
             .forEach(item => {
                 let fill = fills.find(_ => _.id == item.id);
                 if (!fill) {
@@ -513,26 +506,49 @@ export class Portfolio {
                     fills.push(fill);
                     created++;
                 }
-
+                let fillUpdated = false;
                 if (fill.price != item.price ||
                     fill.commission != item.commission?.value) {
                     fill.price = item.price;
                     fill.commission = item.commission?.value;
-                    updated++;
+                    fillUpdated = true;
                 }
-
                 if (fill.quantity != item.quantity ||
                     fill.quantityExecuted != item.quantityExecuted) {
                     fill.quantity = item.quantity;
                     fill.quantityExecuted = item.quantityExecuted;
+                    fillUpdated = true;
                 }
+                if (fill.trades?.length != item.trades.length) {
+                    fill.trades = item.trades;
+                    fillUpdated = true;
+                }
+                if (fillUpdated) {
+                    updated++;
+                }
+            });
 
-                const result = processOperation({
+        let currentQuantity = 0;
+        let totalFixedPnL = 0;
+        let averagePrice = 0;
+        let averagePriceCorrected = 0;
+
+        fills = fills
+            //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by order placed
+            .sort((a, b) => { // sort by last trade executed or order creation if trades is unknown
+                const aDate = Fill.getLastTradeDate(a) ?? new Date(a.date);
+                const bDate = Fill.getLastTradeDate(b) ?? new Date(a.date);
+                return aDate.getTime() -  bDate.getTime()
+            }) 
+        
+        fills
+            .forEach(fill => {
+                const result = processFill({
                     currentQuantity,
                     totalFixedPnL,
                     averagePrice,
                     averagePriceCorrected
-                }, item);
+                }, fill);
 
                 currentQuantity = result.currentQuantity;
                 totalFixedPnL = result.totalFixedPnL;

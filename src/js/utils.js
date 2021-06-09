@@ -91,10 +91,10 @@ export function convertToSlug(text) {
 
 /**
  * 
- * @param {Date} date 
+ * @param {Date | String} date 
  */
 export function printDate(date) {
-    if (date.__proto__ != Date.prototype) {
+    if (!!date && date.__proto__ != Date.prototype) {
         date = new Date(date)
     }
     var options = { year: "2-digit", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" };
