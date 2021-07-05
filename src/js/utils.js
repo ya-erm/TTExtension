@@ -17,11 +17,14 @@ export function mapCurrency(currency) {
  * @param {number} value Числовое значение
  * @param {string} currency Валюта
  * @param {boolean} withSign true, если нужно добавить знак + перед положительным значением
+ * @param {number} precision Количество знаков после запятой
  */
-export function printMoney(value, currency, withSign = false) {
+export function printMoney(value, currency, withSign = false, precision = 2) {
     if (value == null || value == undefined || isNaN(value)) { return ""; }
-    const sign = (withSign && value > 0 ? '+' : '')
-    return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${mapCurrency(currency)}`;
+    const sign = (withSign && value > 0 ? '+' : '');
+    const parts = value.toFixed(precision).split(".");
+    const fractionalPart = parts.length > 1 ? "." + parts[1] : "";
+    return `${sign}${parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ")}${fractionalPart} ${mapCurrency(currency)}`;
 }
 
 /**
@@ -40,10 +43,10 @@ export function getMoneyColorClass(value) {
  */
 export function printVolume(value) {
     if (value == null || value == undefined || isNaN(value)) { return ""; }
-    if (value <= 1000) { return `${value}`; }
-    else if (value < 10_000) { return `${(value / 1_000).toFixed(2)}K`; }
-    else if (value < 100_000) { return `${(value / 1_000).toFixed(1)}K`; }
-    else if (value < 1_000_000) { return `${(value / 1_000).toFixed(0)}K`; }
+    if (Math.abs(value) <= 1000) { return `${value}`; }
+    else if (Math.abs(value) < 10_000) { return `${(value / 1_000).toFixed(2)}K`; }
+    else if (Math.abs(value) < 100_000) { return `${(value / 1_000).toFixed(1)}K`; }
+    else if (Math.abs(value) < 1_000_000) { return `${(value / 1_000).toFixed(0)}K`; }
     else { return `${(value / 1_000_000).toFixed(2)}M`; }
 }
 
@@ -84,4 +87,16 @@ export function convertToSlug(text) {
     return text
         .replace(/ /g, '-')
         .replace(/[^\w-]+/g, '_');
+}
+
+/**
+ * 
+ * @param {Date | String} date 
+ */
+export function printDate(date) {
+    if (!!date && date.__proto__ != Date.prototype) {
+        date = new Date(date)
+    }
+    var options = { year: "2-digit", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" };
+    return date?.toLocaleDateString("ru-RU", options)
 }

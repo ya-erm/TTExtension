@@ -62,4 +62,11 @@ export class Repository {
     async deleteOne(id) {
         return await useWriteTransaction(this.dbParams, objectStore => objectStore.delete(id));
     }
+
+    /**
+     * Удалить базу данных
+     */
+    async dropDatabase() {
+        indexedDB.deleteDatabase(this.dbParams.dbName);
+    }
 }

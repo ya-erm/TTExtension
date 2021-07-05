@@ -1,12 +1,14 @@
 // @ts-check
 import { calcPriceChange, calcPriceChangePercents, getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
+import { showConfirm } from "./confirm.js";
 import { Fill } from "./fill.js";
 import { Portfolio } from "./portfolio.js";
 import { Position } from "./position.js";
+import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
-import { convertToSlug, getMoneyColorClass, mapInstrumentType, printMoney, printVolume, setClassIf } from "./utils.js";
+import { convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
 
 let selectedPortfolio = localStorage.getItem("selectedPortfolio");
 
@@ -87,8 +89,13 @@ function drawPositions(portfolio) {
         if (position.figi != "RUB") {
             getPreviousDayClosePrice(position.figi)
                 .then(previousDayPrice => {
-                    position.previousDayPrice = previousDayPrice;
-                    drawPriceChange(portfolio, position, previousDayPrice);
+                    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
+                    /** @type {HTMLElement} */
+                    const cellChange = positionRow?.querySelector("td.portfolio-change span");
+                    if (cellChange) {
+                        position.previousDayPrice = previousDayPrice;
+                        drawPriceChange(position, previousDayPrice, portfolio.settings.priceChangeUnit, cellChange);
+                    }
                 });
         }
     });
@@ -242,6 +249,17 @@ function addPositionRow(portfolio, position) {
 }
 
 /**
+ * Проверить, совпадают ли рассчитанные по сделкам значения с актуальными
+ * @param {Position} position - позиция
+ * @returns {Boolean}
+ */
+function isInaccurateValue(position) {
+    const calculatedCountNotEqualActual = position.calculatedCount
+        && position.calculatedCount != position.count;
+    return position.needCalc || calculatedCountNotEqualActual;
+}
+
+/**
   * Заполнить строку в таблице позиций данными
   * @param {Portfolio} portfolio - портфель
   * @param {HTMLElement} positionRow - строка таблицы
@@ -263,20 +281,20 @@ function fillPositionRow(portfolio, positionRow, position) {
         positionRow.querySelector(".portfolio-asset-button-remove")?.remove();
     }
 
-    const calculatedCountNotEqualActual = position.calculatedCount
-        && position.calculatedCount != position.count
-        && position.instrumentType != "Currency";
-    const inaccurateValue = position.needCalc || calculatedCountNotEqualActual;
+    const inaccurateValue = isInaccurateValue(position);
+    let average = inaccurateValue ? position.average : position.calculatedAverage;
+    const count = inaccurateValue ? position.count : position.calculatedCount;
+    const expected = inaccurateValue ? position.expected : position.calculatedExpected;
 
     /** @type {HTMLElement} */
     const cellCount = positionRow.querySelector("td.portfolio-count");
-    cellCount.textContent = printVolume(position.count);
-    setClassIf(cellCount, "inaccurate-value-text", calculatedCountNotEqualActual);
-    if (calculatedCountNotEqualActual) {
+    cellCount.textContent = printVolume(count);
+    setClassIf(cellCount, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
+    if (inaccurateValue) {
         cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
             `Actual value: ${position.count}`;
-    } else if (cellCount.textContent != `${position.count}`) {
-        cellCount.title = `${position.count}`;
+    } else if (cellCount.textContent != `${count}`) {
+        cellCount.title = `${count}`;
     } else {
         cellCount.title = "";
     }
@@ -284,7 +302,6 @@ function fillPositionRow(portfolio, positionRow, position) {
     /** @type {HTMLElement} */
     const cellAverage = positionRow.querySelector("td.portfolio-average");
     cellAverage.title = "";
-    let average = position.average;
     if (position.count == 0) {
         const fills = portfolio.fills[position.ticker];
         if (fills?.length > 1) {
@@ -296,6 +313,16 @@ function fillPositionRow(portfolio, positionRow, position) {
     }
     cellAverage.textContent = printMoney(average, position.currency);
     setClassIf(cellAverage, "inaccurate-value-text", inaccurateValue || position.count == 0);
+    if (inaccurateValue) {
+        instrumentsRepository.getOneByFigi(position.figi)
+            .then(instrument => {
+                const precision = instrument?.minPriceIncrement.toString().length ?? 4 - 2
+                cellAverage.title = `Calculated by fills: ${printMoney(position.calculatedAverage, null, false, precision)}\n` +
+                    `Actual value: ${printMoney(position.average, null, false, precision)}`;
+        });
+    } else {
+        cellAverage.title = "";
+    }
 
     /** @type {HTMLElement} */
     const cellLast = positionRow.querySelector("td.portfolio-last");
@@ -308,18 +335,18 @@ function fillPositionRow(portfolio, positionRow, position) {
     cellCost.textContent = (position.count != 0)
         ? printMoney(position.count * position.lastPrice, position.currency)
         : "";
-    setClassIf(cellCost, "inaccurate-value-text", inaccurateValue);
+    setClassIf(cellCost, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
 
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     if (position.count != 0) {
         if (portfolio.settings.expectedUnit == "Percents") {
-            const expectedPercents = 100 * position.expected / (position.count * position.lastPrice);
+            const expectedPercents = 100 * expected / (count * position.lastPrice);
             cellExpected.textContent = printMoney(expectedPercents, "%", true);
         } else {
-            cellExpected.textContent = printMoney(position.expected, position.currency, true);
+            cellExpected.textContent = printMoney(expected, position.currency, true);
         }
-        cellExpected.className = getMoneyColorClass(position.expected);
-        setClassIf(cellExpected, "inaccurate-value-text", inaccurateValue);
+        cellExpected.className = getMoneyColorClass(expected);
+        setClassIf(cellExpected, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
     } else {
         cellExpected.textContent = "";
     }
@@ -387,13 +414,17 @@ function addPositionSummaryRow(portfolio) {
         }
     } */
     const total = portfolio.positions.reduce((result, position) => {
+        const inaccurateValue = isInaccurateValue(position);
+        const count = inaccurateValue ? position.count : position.calculatedCount;
+        const average = inaccurateValue ? position.average : position.calculatedAverage;
+        const expected = inaccurateValue ? position.expected : position.calculatedExpected;
         result.cost[position.currency] |= 0;
         result.expected[position.currency] |= 0;
         result.fixedPnL[position.currency] |= 0;
-        result.cost[position.currency] += (position.count || 0) * (position.average || 0) + (position.expected || 0);
+        result.cost[position.currency] += (count || 0) * (average || 0) + (expected || 0);
         if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
             // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
-            result.expected[position.currency] += (position.expected || 0);
+            result.expected[position.currency] += (expected || 0);
             const fixedPnL = (portfolio.settings.allDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(portfolio, position);
             result.fixedPnL[position.currency] += (fixedPnL || 0);
         }
@@ -407,12 +438,14 @@ function addPositionSummaryRow(portfolio) {
         totalCostTitle += `${key}: ${printMoney(total.cost[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.cost[key];
     }, 0);
+    totalCostTitle = totalCostTitle.trimEnd();
 
     let totalExpectedTitle = "Total expected \n";
     const totalExpected = Object.keys(total.expected).reduce((result, key) => {
         totalExpectedTitle += `${key}: ${printMoney(total.expected[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
+    totalExpectedTitle = totalExpectedTitle.trimEnd();
 
     let totalFixedPnLTitle = (portfolio.settings.allDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
@@ -488,6 +521,7 @@ function changeSelectedCurrency(portfolio, selectedCurrency) {
  * @param {Position} position
  */
 function onPositionClick(portfolio, position) {
+    if (position.figi == "RUB") { return; }
     const ticker = position.ticker;
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(ticker)}`;
     // Если вкладка не существует
@@ -504,6 +538,16 @@ function onPositionClick(portfolio, position) {
         // Загружаем новые сделки и обновляем таблицу
         portfolio.loadFillsByTicker(position.ticker)
             .then((fills) => drawOperations(portfolio, position, fills));
+
+        // Загружаем активные заявки
+        portfolio.loadOrdersByTicker(position.ticker)
+            .then((orders) => {
+                position.orders = orders;
+                drawOrders(portfolio, position);
+            });
+
+        // Отображаем панель торговли
+        drawTradingPanel(portfolio, position);
     }
     // Открываем вкладку
     openTab(tabId);
@@ -529,13 +573,13 @@ function onOperationsLinkClick() {
         // Отображаем операции из памяти
         getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter)
             .then(operations => {
-                DrawSystemOperations(portfolio, operations);
+                drawSystemOperations(portfolio, operations);
             });
 
         // Загружаем новые операции и отображаем их
         portfolio.loadOperations()
             .then((operations) => {
-                DrawSystemOperations(portfolio, operations);
+                drawSystemOperations(portfolio, operations);
                 setClassIf(loadingSpinner, "d-none", true);
             });
     }
@@ -554,20 +598,17 @@ function onPositionRemoveClick(portfolio, position) {
 
 /**
  * Отрисовка изменения цены актива
- * @param {Portfolio} portfolio
- * @param {Position} position
- * @param {number} previousDayPrice 
+ * @param {Position} position позиция
+ * @param {number} previousDayPrice цена актива за предыдущий день
+ * @param {string} priceChangeUnit единица измерения: "Percents" или "Currency"
+ * @param {HTMLElement} cellChange HTML элемент, в котором нужно отрисовать изменение цены
  */
-function drawPriceChange(portfolio, position, previousDayPrice) {
-    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
-    /** @type {HTMLElement} */
-    const cellChange = positionRow?.querySelector("td.portfolio-change span");
+function drawPriceChange(position, previousDayPrice, priceChangeUnit, cellChange) {
     if (!cellChange) { return; }
-
-    let change = portfolio.settings.priceChangeUnit == "Percents"
+    let change = priceChangeUnit == "Percents"
         ? calcPriceChangePercents(previousDayPrice, position.lastPrice)
         : calcPriceChange(previousDayPrice, position.lastPrice);
-    const unit = portfolio.settings.priceChangeUnit == "Percents" ? "%" : position.currency;
+    const unit = priceChangeUnit == "Percents" ? "%" : position.currency;
     cellChange.title = `Previous trading day close price: ${printMoney(previousDayPrice, position.currency)}`;
     cellChange.textContent = printMoney(change, unit, true);
     cellChange.className = getMoneyColorClass(change);
@@ -618,7 +659,7 @@ function addPortfolioSortButtonHandlers(portfolio) {
  */
 function drawOperations(portfolio, position, fills) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
-    const tbody = document.querySelector(`#${tabId} table tbody`)
+    const tbody = document.querySelector(`#${tabId} table.table-fills tbody.fills`)
     tbody.innerHTML = "";
 
     fills.forEach((item, index) => {
@@ -630,8 +671,9 @@ function drawOperations(portfolio, position, fills) {
 
         /** @type {HTMLElement} */
         const cellTime = fillRow.querySelector("td.fills-time");
-        cellTime.textContent = item.date.substring(5, 19).replace(/-/g, "/").replace("T", " ");
-        cellTime.title = new Date(item.date).toString().split(" (")[0];
+        cellTime.textContent = printDate(Fill.getLastTradeDate(item)) ?? printDate(item.date);
+        cellTime.title = "Created: " + printDate(item.date) + ",\n" + "Executed: " + printDate(Fill.getLastTradeDate(item));
+        setClassIf(cellTime, "inaccurate-value-text", !!!Fill.getLastTradeDate(item))
 
         const cellType = fillRow.querySelector("td.fills-type span");
         cellType.textContent = item.operationType == "BuyCard" ? "Buy" : item.operationType;
@@ -690,7 +732,7 @@ function drawOperations(portfolio, position, fills) {
  * @param {Portfolio} portfolio
  * @param {import("./storage/operationsRepository.js").Operation[]} operations
  */
-async function DrawSystemOperations(portfolio, operations) {
+async function drawSystemOperations(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
         .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
@@ -827,6 +869,130 @@ async function DrawSystemOperations(portfolio, operations) {
         });
 }
 
+/**
+ * Отрисовка заявок по активу
+ * @param {Portfolio} portfolio
+ * @param {Position} position
+ */
+function drawOrders(portfolio, position) {
+    const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
+    const tbody = document.querySelector(`#${tabId} table.table-fills tbody.orders`)
+    tbody.innerHTML = "";
+
+    const orders = position.orders.sort((a, b) => b.price - a.price);
+    orders.forEach(item => {
+        /** @type {HTMLElement} */ //@ts-ignore
+        const orderRow = document.querySelector("#fills-row-template").content.firstElementChild.cloneNode(true);
+
+        /** @type {HTMLElement} */ //@ts-ignore
+        const deleteButton = document.querySelector("#order-cancel-button-template").content.firstElementChild.cloneNode(true);
+
+        deleteButton.addEventListener("click", async () => {
+            try {
+                await TTApi.cancelOrder(item.orderId, portfolio.account);
+                tbody.removeChild(orderRow);
+            } catch (e) {
+                console.error(`Не удалось отменить заявку #${item.orderId}`);
+            }
+        });
+
+        const cellIndex = orderRow.querySelector("td.fills-index");
+        cellIndex.classList.add("d-flex", "align-items-center", "justify-content-center");
+        cellIndex.appendChild(deleteButton);
+
+        const cellTime = orderRow.querySelector("td.fills-time");
+        cellTime.textContent = `${item.type} order`;
+
+        const cellType = orderRow.querySelector("td.fills-type span");
+        cellType.textContent = item.operation;
+        cellType.className = item.operation === "Sell" ? "text-danger" : "text-success";
+
+        const cellPrice = orderRow.querySelector("td.fills-price");
+        cellPrice.textContent = item.price.toFixed(2);
+
+        const cellCount = orderRow.querySelector("td.fills-count");
+        cellCount.textContent = (item.operation === "Sell" ? "-" : "+") + (item.requestedLots);
+
+        const cellPayment = orderRow.querySelector("td.fills-payment");
+        cellPayment.textContent = (item.price * item.requestedLots).toFixed(2);
+
+        tbody.append(orderRow);
+    });
+}
+
+/**
+ * Отрисовать панель для торговли
+ * @param {Portfolio} portfolio 
+ * @param {Position} position 
+ */
+async function drawTradingPanel(portfolio, position) {
+    const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
+    const tradingPanel = document.querySelector(`#${tabId} .trading-panel`);
+    const priceSpan = tradingPanel.querySelector(".trading-price");
+
+    /** @type {HTMLFormElement} */
+    const formPlaceOrder = tradingPanel.querySelector(".trading-place-order form");
+    /** @type {HTMLInputElement} */
+    const inputPrice = tradingPanel.querySelector(".trading-place-order-price");
+    /** @type {HTMLInputElement} */
+    const inputLots = tradingPanel.querySelector(".trading-place-order-lots");
+    /** @type {HTMLElement} */
+    const spanCost = tradingPanel.querySelector(".trading-place-order-cost");
+
+    let pricePrecision = 2;
+    const instrument = await instrumentsRepository.getOneByFigi(position.figi)
+    if (instrument?.minPriceIncrement) {
+        inputPrice.setAttribute("step", instrument.minPriceIncrement.toString());
+        pricePrecision = instrument.minPriceIncrement.toString().length - 2;
+        if (pricePrecision < 2) { pricePrecision = 2; }
+    }
+
+    priceSpan.textContent = printMoney(position.lastPrice, position.currency, false, pricePrecision);
+    getPreviousDayClosePrice(position.figi)
+        .then(previousDayPrice => {
+            /** @type {HTMLElement} */
+            const spanPriceChange = tradingPanel.querySelector(".trading-price-change span");
+            drawPriceChange(position, previousDayPrice, "Currency", spanPriceChange);
+            /** @type {HTMLElement} */
+            const spanPriceChangePercents = tradingPanel.querySelector(".trading-price-change-percents span");
+            drawPriceChange(position, previousDayPrice, "Percents", spanPriceChangePercents);
+        });
+
+    const drawCost = () => {
+        spanCost.textContent = printMoney(parseFloat(inputPrice.value) * parseInt(inputLots.value), position.currency);
+    };
+    ["keyup", "change", "paste"].forEach(eventName => {
+        inputPrice.addEventListener(eventName, drawCost);
+        inputLots.addEventListener(eventName, drawCost);
+    });
+    priceSpan.addEventListener("click", () => {
+        inputPrice.value = position.lastPrice.toFixed(pricePrecision);
+        drawCost();
+    });
+
+    formPlaceOrder.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const order = {
+            lots: parseInt(inputLots.value),
+            //@ts-ignore
+            operation: e.submitter.dataset.value,
+            price: parseFloat(inputPrice.value),
+        };
+
+        showConfirm(
+            `Confirm to ${order.operation.toLowerCase()} ${position.ticker}?`,
+            `Price: ${printMoney(order.price, instrument.currency)}\r\n`
+            + `Lots: ${order.lots}\r\n`
+            + `Cost: ${printMoney(order.price * order.lots, instrument.currency)}`,
+            async () => {
+                const item = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
+                position.orders.push(item);
+                drawOrders(portfolio, position);
+            }
+        );
+    });
+}
+
 // #endregion
 
 // #region Settings
@@ -870,6 +1036,8 @@ eraseButton.addEventListener("click", () => {
             }
         });
     document.querySelector(".portfolio-total-cost").innerHTML = "";
+    getOperationsRepository("").dropDatabase();
+    instrumentsRepository.dropDatabase();
     TTApi.eraseData();
     // Скрываем кнопку очистки хранилища
     setClassIf(eraseButton, "d-none", true);
@@ -930,7 +1098,6 @@ excludeCurrenciesFromTotalCheckbox.addEventListener("change", (e) => {
 /** @type {HTMLFormElement} */ //@ts-ignore
 const tokenForm = document.getElementById("token-form");
 
-// Обработчик сабмита формы с токеном
 tokenForm.addEventListener("submit", (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
@@ -965,7 +1132,6 @@ addPositionInput.oninput = function () {
     addPositionError.textContent = "";
 };
 
-// Обработчик сабмита формы
 addPositionForm.addEventListener("submit", (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
@@ -1168,7 +1334,7 @@ filterOperationsForm.addEventListener("submit", async (e) => {
     const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
 
     const operations = await getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter);
-    DrawSystemOperations(portfolio, operations);
+    drawSystemOperations(portfolio, operations);
 
     //@ts-ignore
     $('#filter-operations-modal').modal('hide');

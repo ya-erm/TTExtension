@@ -205,7 +205,60 @@
         <!--Fills-->
         <template id="tab-pane-fills-template">
             <div class="tab-pane fade" id="example" role="tabpanel" aria-labelledby="example-tab">
-                <table class="table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
+                <!-- Trading panel -->
+                <div class="trading-panel d-flex justify-content-center p-1">
+                    <!-- <div class="trading-chart-container mr-2"> -->
+                    <!-- <div class="trading-chart">
+                            <img src="img/chart.png" height="80" />
+                        </div> -->
+                    <!-- <div class="trading-chart-period-buttons">
+                            <div class="trading-chart-period-button">D</div>
+                            <div class="trading-chart-period-button">W</div>
+                            <div class="trading-chart-period-button">M</div>
+                            <div class="trading-chart-period-button">Y</div>
+                        </div> -->
+                    <!-- </div> -->
+                    <div class="trading-price-container mr-2">
+                        <div class="trading-price cursor-pointer">123.45 $</div>
+                        <div class="trading-price-change text-right"><span>...</span></div>
+                        <div class="trading-price-change-percents text-right"><span>...</span></div>
+                    </div>
+                    <!-- <div class="trading-orderbook mr-2"></div> -->
+                    <div class="trading-place-order">
+                        <form>
+                            <div class="form-row align-items-center">
+                                <div class="col-auto">
+                                    <input class="form-control form-control-sm trading-place-order-price" name="price"
+                                        placeholder="Price" type="number" min="0" step="0.01" required></input>
+                                </div>
+                                <div class="col-auto">
+                                    <span>x</span>
+                                </div>
+                                <div class="col-auto">
+                                    <input class="form-control form-control-sm trading-place-order-lots" name="lots"
+                                        placeholder="Lots" type="number" min="1" step="1" value="1" required></input>
+                                </div>
+                                <div class="col-auto">
+                                    <span class="mr-1">=</span>
+                                    <span class="trading-place-order-cost">0 $</span>
+                                </div>
+                            </div>
+                            <div class="form-row mt-2">
+                                <div class="col">
+                                    <button type="submit" data-value="Buy"
+                                        class="btn btn-sm btn-success w-100">Buy</button>
+                                </div>
+                                <div class="col">
+                                    <button type="submit" data-value="Sell"
+                                        class="btn btn-sm btn-danger w-100">Sell</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <!-- Fills table -->
+                <table
+                    class="table-fills table table-sm table-striped table-bordered table-hover table-dark text-nowrap">
                     <thead class="thead-sticky">
                         <tr>
                             <th class="text-right" title="Index">№</th>
@@ -221,7 +274,8 @@
                             <th class="text-right cursor-help" title="Fixed Profit or Loss">Fixed P&L</th>
                         </tr>
                     </thead>
-                    <tbody></tbody>
+                    <tbody class="orders"></tbody>
+                    <tbody class="fills"></tbody>
                 </table>
             </div>
         </template>
@@ -239,6 +293,11 @@
                 <td class="fills-position text-right"></td>
                 <td class="fills-fixed-pnl text-right"><span></span></td>
             </tr>
+        </template>
+        <template id="order-cancel-button-template">
+            <button class="order-cancel-button btn btn-xs btn-icon btn-link">
+                <i class="fa fa-trash-o" title="Cancel order"></i>
+            </button>
         </template>
 
         <!--Money transactions-->
@@ -409,6 +468,31 @@
                         </div>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+    <!-- Modal confirm-->
+    <div class="modal fade" id="confirm-modal" tabindex="-1" role="dialog" aria-labelledby="confirm-modal-label"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirm-modal-label">Title</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="text">Text</div>
+                    <div class="error-message text-danger"></div>
+                </div>
+                <div class="modal-footer justify-content-end">
+                    <div class="m-0">
+                        <button type="button" id="confirm-cancel-button" class="btn btn-secondary ml-2"
+                            data-dismiss="modal">Cancel</button>
+                        <button type="button" id="confirm-ok-button" class="btn btn-primary ml-2">Ok</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

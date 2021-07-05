@@ -32,6 +32,9 @@ export class Fill {
         /** @type {number?} комиссия, например {currency: "USD", value: -0.07} */
         this.commission = item.commission?.value;
 
+        /** @type {Array} */
+        this.trades = item.trades
+
         // Расчётные накопительные параметры:
 
         /** @type {number?} средняя цена */
@@ -45,5 +48,15 @@ export class Fill {
 
         /** @type {number?} зафиксированная прибыль */
         this.fixedPnL = undefined;
+    }
+
+    /**
+     * @param {Fill} fill
+     * @returns {Date?}
+     */
+    static getLastTradeDate(fill) {
+        if (fill.trades?.length > 0) {
+            return new Date(fill.trades[fill.trades.length - 1].date)
+        }
     }
 }

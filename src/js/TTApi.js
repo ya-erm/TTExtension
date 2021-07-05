@@ -30,14 +30,18 @@ export const TTApi = {
     loadInstrumentByFigi,
     loadInstrumentByTicker,
     loadOperationsByFigi,
+    loadOrdersByFigi,
+    cancelOrder,
     findCandles,
     loadCandles,
     loadOrderbook,
     loadOrderbookByTicker,
+    placeLimitOrder,
     getCurrencyRate,
     savePortfolios,
     eraseData,
     httpGet,
+    httpPost,
 };
 
 // @ts-ignore
@@ -83,6 +87,34 @@ async function httpGet(path) {
  * @property {string} brokerAccountId - идентификатор счёта
  * @property {string} brokerAccountType - тип счёта (Tinkoff, TinkoffIis)
  */
+
+/**
+ * Отправить HTTP PUT запрос к API
+ * @param {string} path - относительный адрес
+ * @param {object} body - тело запроса
+ * @returns 
+ */
+async function httpPost(path, body) {
+    const response = await fetch(apiURL + path, {
+        method: 'POST',
+        headers: {
+            Authorization: 'Bearer ' + TTApi.token,
+            'Content-Type': 'application/json;charset=utf-8',
+        },
+        body: JSON.stringify(body)
+    });
+    if (response.status == 200) {
+        const data = await response.json();
+        console.log(`POST ${path}`, body, '\n', data);
+        return (data.payload);
+    } else {
+        console.log(`POST ${path}`, body, '\n', response.statusText);
+        const error = new Error(response.statusText);
+        // @ts-ignore
+        error.code = response.status;
+        throw error;
+    }
+}
 
 /**
  * Загрузить список доступных счётов
@@ -172,6 +204,40 @@ async function loadInstrumentByTicker(ticker) {
         return instrument;
     }
     return null;
+}
+
+/**
+ * @typedef Order
+ * @property {string} orderId - идентификатор заявки
+ * @property {string} figi - идентификатор FIGI
+ * @property {string} operation - тип операции (Buy, Sell)
+ * @property {string} type - тип заявки (Limit, Market)
+ * @property {string} status - статус заявки (New, PartiallyFill, Fill, Cancelled, Replaced, PendingCancel, Rejected, PendingReplace, PendingNew)
+ * @property {number} requestedLots - запрашиваемое количество лотов в заявке
+ * @property {number} executedLots - количество исполненных лотов
+ * @property {number} price - цена
+ */
+
+/**
+ * Загрузить список активных заявок
+ * @param {string} figi - идентификатор FIGI
+ * @param {string} account - идентификатор счёта
+ * @returns {Promise<Order[]>}
+ */
+async function loadOrdersByFigi(figi, account) {
+    const orders = await httpGet(`/orders?figi=${figi}&brokerAccountId=${account}`);
+    return orders.filter(item => item.figi == figi);
+}
+
+/**
+ * Отменить заявку
+ * @param {string} orderId - идентификатор заявки
+ * @param {string} account - идентификатор счёта
+ * @returns 
+ */
+async function cancelOrder(orderId, account) {
+    const payload = await httpPost(`/orders/cancel?orderId=${orderId}&brokerAccountId=${account}`);
+    return payload;
 }
 
 /**
@@ -319,4 +385,34 @@ async function getCurrencyRate(currency) {
         TTApi.currencyRates[currency] = currencyRate;
     }
     return currencyRate;
+}
+
+/**
+ * @typedef PlaceLimitOrderResponse
+ * @property {string} orderId - идентификатор заявки
+ * @property {string} operation - тип операции (Buy, Sell)
+ * @property {string} status - статус заявки (New, PartiallyFill, Fill, Cancelled, Replaced, PendingCancel, Rejected, PendingReplace, PendingNew)
+ * @property {number} requestedLots - запрашиваемое количество лотов в заявке
+ * @property {number} executedLots - количество исполненных лотов
+ * @property {{currency: string, value: number}?} commission - комиссия
+ * @property {string?} rejectReason - причина отказа
+ * @property {string?} message - сообщение
+ */
+
+/**
+ * Создание лимитной заявки
+ * @param {string} figi - идентификатор актива
+ * @param {{lots: number, operation: string, price: number}} body - тело запроса { lots: 0, operation: "Buy", price: 0 }
+ * @param {string} account - идентификатор счёта
+ * @returns {Promise<Order>}
+ */
+async function placeLimitOrder(figi, body, account = undefined) {
+    /** @type {PlaceLimitOrderResponse} */
+    const payload = await httpPost(`/orders/limit-order?figi=${figi}` + (!!account ? `&brokerAccountId=${account}` : ""), body);
+    
+    if (payload.rejectReason) {
+        throw new Error(payload.message);
+    }
+
+    return { ...payload, figi, type: "Limit", price: body.price };
 }
