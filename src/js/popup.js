@@ -265,7 +265,7 @@ function isInaccurateValue(position) {
   * @param {HTMLElement} positionRow - строка таблицы
   * @param {Position} position - позиция
   */
-function fillPositionRow(portfolio, positionRow, position) {
+async function fillPositionRow(portfolio, positionRow, position) {
     if (position.count == 0) {
         if (!positionRow.querySelector(".portfolio-asset-button-remove")) {
             /** @type {HTMLElement} */ // @ts-ignore
@@ -303,7 +303,7 @@ function fillPositionRow(portfolio, positionRow, position) {
     const cellAverage = positionRow.querySelector("td.portfolio-average");
     cellAverage.title = "";
     if (position.count == 0) {
-        const fills = portfolio.fills[position.ticker];
+        const fills = await portfolio.fillsRepository.getAllByFigi(position.figi);
         if (fills?.length > 1) {
             const fill = fills[fills.length - 2];
             average = fill.averagePrice;
@@ -356,7 +356,7 @@ function fillPositionRow(portfolio, positionRow, position) {
         cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
     } else {
-        const fixedPnLToday = getTodayFixedPnL(portfolio, position);
+        const fixedPnLToday = await getTodayFixedPnL(portfolio, position);
         cellFixedPnL.textContent = printMoney(fixedPnLToday, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(fixedPnLToday);
     }
@@ -367,9 +367,9 @@ function fillPositionRow(portfolio, positionRow, position) {
  * @param {Portfolio} portfolio
  * @param {Position} position
  */
-function getTodayFixedPnL(portfolio, position) {
+async function getTodayFixedPnL(portfolio, position) {
     const now = new Date();
-    const fills = portfolio.fills[position.ticker] || [];
+    const fills = await portfolio.fillsRepository.getAllByFigi(position.figi);
     const fillsToday = fills.filter(fill => {
         if (fill.fixedPnL == undefined) { return false; }
         const fillDate = new Date(fill.date);
@@ -532,9 +532,9 @@ function onPositionClick(portfolio, position) {
         tab.querySelector(".tab-close-button").addEventListener('click', () => closeTab(tabId));
 
         // Отображаем сделки из памяти
-        if (portfolio.fills[position.ticker]) {
-            drawOperations(portfolio, position, portfolio.fills[position.ticker]);
-        }
+        portfolio.fillsRepository.getAllByFigi(position.figi)
+            .then((fills) => drawOperations(portfolio, position, fills));
+
         // Загружаем новые сделки и обновляем таблицу
         portfolio.loadFillsByTicker(position.ticker)
             .then((fills) => drawOperations(portfolio, position, fills));

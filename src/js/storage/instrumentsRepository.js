@@ -22,7 +22,7 @@ const storeName = "instruments";
  * Хранилище инструментов
  * @extends {Repository<Instrument>}
  */
-class InstrumentsRepository extends Repository {
+export class InstrumentsRepository extends Repository {
     constructor() {
         super({
             dbName: "instruments",
