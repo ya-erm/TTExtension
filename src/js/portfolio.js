@@ -2,8 +2,9 @@
 import { calcPriceChange, calcPriceChangePercents, processFill } from "./calculate.js";
 import { Fill } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
+import getFillsRepository, { FillsRepository } from "./storage/fillsRepository.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
-import getOperationsRepository from "./storage/operationsRepository.js";
+import getOperationsRepository, { OperationsRepository } from "./storage/operationsRepository.js";
 import { TTApi } from "./TTApi.js";
 
 /**
@@ -46,16 +47,23 @@ export class Portfolio {
         /** @type {string?} идентификатор счёта */
         this.account = undefined;
 
-        /** @type {Position[]} словарь сделок*/
+        /** @type {Position[]} список позиций*/
         this.positions = [];
-
-        /** @type {Object<string, Fill[]>} список позиций */
-        this.fills = {};
 
         /** @type {PortfolioSettings} настройки портфеля */
         this.settings = undefined;
 
         this.fillMissingFields();
+    }
+    
+    /** @type {FillsRepository} хранилище сделок */
+    get fillsRepository() {
+        return getFillsRepository(this.id)
+    }
+    
+    /** @type {OperationsRepository} хранилище операций */
+    get operationsRepository() {
+        return getOperationsRepository(this.account)
     }
 
     /**
@@ -74,6 +82,8 @@ export class Portfolio {
                 }
             }
         }
+        // @ts-ignore
+        if (this.fills) { delete this.fills }
     }
 
     /**
@@ -348,8 +358,8 @@ export class Portfolio {
             const operations = await TTApi.loadOperationsByFigi(position.figi, this.account);
 
             if (operations.length > 0) {
-                getOperationsRepository(this.account).putMany(operations);
-                this.updateFills(position, operations);
+                this.operationsRepository.putMany(operations);
+                await this.updateFills(position, operations);
             }
         });
     }
@@ -465,7 +475,7 @@ export class Portfolio {
         }
 
         const operations = await TTApi.loadOperationsByFigi(figi, this.account);
-        getOperationsRepository(this.account).putMany(operations);
+        await this.operationsRepository.putMany(operations);
         const position = await this.findPosition(figi);
 
         if (!this.positions.includes(position)) {
@@ -473,9 +483,7 @@ export class Portfolio {
             this.sortPositions();
         }
 
-        this.updateFills(position, operations);
-
-        return this.fills[ticker];
+        return await this.updateFills(position, operations);
     }
 
     /**
@@ -483,7 +491,7 @@ export class Portfolio {
      */
     async loadOperations() {
         const operations = await TTApi.loadOperationsByFigi(undefined, this.account);
-        getOperationsRepository(this.account).putMany(operations);
+        this.operationsRepository.putMany(operations);
         return operations;
     }
 
@@ -491,21 +499,25 @@ export class Portfolio {
      * Обновить список сделок и просчитать позиции
      * @param {Position} position - позиция
      * @param {Array<import("./TTApi.js").Operation>} operations - список операций
+     * @returns {Promise<Array<Fill>>}
      */
-    updateFills(position, operations) {
+    async updateFills(position, operations) {
         let created = 0;
         let updated = 0;
-        let fills = this.fills[position.ticker] || [];
+        let fills = await this.fillsRepository.getAllByFigi(position.figi) || [];
 
         operations
             .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
             .forEach(item => {
                 let fill = fills.find(_ => _.id == item.id);
                 if (!fill) {
-                    fill = new Fill(item);
+                    fill = new Fill(this.id, item);
                     fills.push(fill);
                     created++;
                 }
+                // Не обновляем данные сделки, если она была исправлена вручную
+                if (fill.manual) { return; }
+
                 let fillUpdated = false;
                 if (fill.price != item.price ||
                     fill.commission != item.commission?.value) {
@@ -562,8 +574,8 @@ export class Portfolio {
             });
 
         console.log(`Fills ${position.ticker} created: ${created}, updated: ${updated}`)
-        this.fills[position.ticker] = fills;
-        this.save();
+        
+        await this.fillsRepository.putMany(fills);
 
         position.calculatedCount = currentQuantity;
         if (position.count != currentQuantity) {
@@ -572,6 +584,9 @@ export class Portfolio {
 
         // Обновляем позицию
         updatePosition(position, averagePrice, totalFixedPnL);
+        this.save();
+
+        return fills;
     }
 
     // #endregion

@@ -5,11 +5,18 @@
 export class Fill {
     /**
      * @constructor
+     * @param {string} portfolioId
      * @param {import("./TTApi").Operation} item 
      */
-    constructor(item) {
+    constructor(portfolioId, item) {
+        /** @type {string} идентификатор портфеля */
+        this.portfolioId = portfolioId
+
         /** @type {string} идентификатор сделки */
         this.id = item.id;
+
+        /** @type {string} идентификатор инструмента */
+        this.figi = item.figi;
 
         /** @type {string} дата и время в ISO8601, например "2021-02-10T11:18:27.276+03:00" */
         this.date = item.date;
@@ -48,6 +55,10 @@ export class Fill {
 
         /** @type {number?} зафиксированная прибыль */
         this.fixedPnL = undefined;
+
+        // Признак ручного редактирования
+        /** @type {boolean?} true, если запись изменена вручную */
+        this.manual = undefined;
     }
 
     /**

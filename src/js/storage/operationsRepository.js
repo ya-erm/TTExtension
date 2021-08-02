@@ -28,7 +28,7 @@ const storeName = "operations";
  * Хранилище операций
  * @extends {Repository<Operation>}
  */
-class OperationsRepository extends Repository {
+export class OperationsRepository extends Repository {
     /**
      * @param {string} account - идентификатор счёта
      */
