@@ -229,3 +229,83 @@
 #confirm-modal .modal-body .text {
     white-space: pre-line;
 }
+
+.toasts-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+.toasts-container {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    margin: 0 auto;
+}
+
+.toast-message {
+    color: white;
+    background: #137cbd;
+    border-radius: 3px;
+    box-shadow: 
+        0 0 0 1px rgb(16 22 26 / 10%), 
+        0 2px 4px rgb(16 22 26 / 20%), 
+        0 8px 24px rgb(16 22 26 / 20%);
+    margin: 15px 0 0;
+    max-width: 500px;
+    min-width: 300px;
+    pointer-events: all;
+    position: relative;
+    display: flex;
+    align-items: center;
+    z-index: 20;
+}
+
+.toast-message a {
+    color: hsla(0, 0%, 100%, .75);
+}
+
+.toast-message.info {
+    background: #137cbd;
+}
+
+.toast-message.success {
+    background: #0f9960;
+}
+
+.toast-message.error {
+    background: #db3737;
+}
+
+.toast-message .toast-icon {
+    margin: 0 12px
+}
+
+.toast-message .toast-text {
+    flex-grow: 1;
+    font-size: 14px;
+    line-height: 1.15;
+}
+
+.toast-message button {
+    color: hsla(0, 0%, 100%, .75);
+    border: none;
+    background: none;
+    margin-right: 6px;
+    border-radius: 3px;
+    height: 30px;
+    margin: 5px;
+    margin-left: 0;
+}
+
+.toast-message button:hover {
+    background-color: hsla(0, 0%, 100%, .15);
+    color: white;
+}
+
+.toast-message button.toast-close {
+    padding: 0 8px;
+    font-size: 20px;
+}
