@@ -10,6 +10,33 @@ import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
 import { convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
 
+async function checkForUpdates() {
+    // @ts-ignore
+    const manifest = chrome.runtime.getManifest();
+    const currentVersion = manifest.version;
+    const response = await fetch("https://api.github.com/repos/ya-erm/TTExtension/releases/latest");
+    const data = await response.json();
+    const downloadUrl = data.zipball_url;
+    const latestVersion = data.tag_name;
+    const releaseUrl = data.html_url;
+    if (currentVersion < latestVersion) {
+        console.log("Доступна новая версия", latestVersion, downloadUrl);
+        const toastsContainer = document.querySelector(".toasts-container");
+        /** @type {HTMLElement} */ // @ts-ignore
+        const toast = document.querySelector('#toast-template').content.firstElementChild.cloneNode(true);
+        // @ts-ignore
+        toast.querySelector(".toast-close").addEventListener("click", () => {
+            toastsContainer.removeChild(toast);
+        });
+        toast.querySelector(".toast-text").innerHTML = `
+            <span class="mr-1">Доступна новая версия <a href="${releaseUrl}" target="_blank">${latestVersion}</a></span>
+            <a href="${downloadUrl}" target="_blank"><button>Скачать</button></a>`;
+        toastsContainer.appendChild(toast);
+    }
+}
+
+checkForUpdates();
+
 let selectedPortfolio = localStorage.getItem("selectedPortfolio");
 
 async function main() {
