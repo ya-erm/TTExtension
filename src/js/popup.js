@@ -504,6 +504,17 @@ function addPositionSummaryRow(portfolio) {
     assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
     assetCell.addEventListener("click", onOperationsLinkClick);
 
+    /** @type {HTMLTableCellElement} */
+    const averageCell = positionRow.querySelector("td.portfolio-average");
+    const totalResult = totalExpected + totalFixedPnL;
+    averageCell.innerHTML = "Result: <span class='ml-1'></span>";
+    averageCell.querySelector("span").textContent = printMoney(totalResult, selectedCurrency, true);
+    setClassIf(averageCell.querySelector("span"), getMoneyColorClass(totalResult), true);
+    averageCell.colSpan = 2;
+
+    const priceCell = positionRow.querySelector("td.portfolio-last");
+    priceCell.remove();
+
     const tfoot = document.querySelector(`#portfolio-${portfolio.id}-table tfoot.positions-summary-row`);
     tfoot.appendChild(positionRow);
 
