@@ -100,3 +100,25 @@ export function printDate(date) {
     var options = { year: "2-digit", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" };
     return date?.toLocaleDateString("ru-RU", options)
 }
+
+/**
+ * Сравнение версий
+ * @param {string} a - версия 1
+ * @param {string} b - версия 2
+ * @returns {number} a < b: -1, a == b: 0, a > b: 1
+ */
+export function compareVersions(a, b) {
+    const aa = a.split(".").map(x => Number(x));
+    const bb = b.split(".").map(x => Number(x));
+
+    while (aa.length < 3) { aa.push(0); }
+    while (bb.length < 3) { bb.push(0); }
+
+    for(let i = 0; i < 3; i++ ){
+        if (aa[i] < bb[i]) {
+            return -1;
+        } else if (aa[i] > bb [i]){
+            return 1;
+        }
+    }
+}

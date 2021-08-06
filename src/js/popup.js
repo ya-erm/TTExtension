@@ -8,7 +8,7 @@ import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { TTApi } from "./TTApi.js";
-import { convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
+import { compareVersions, convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
 
 async function checkForUpdates() {
     // @ts-ignore
@@ -19,11 +19,12 @@ async function checkForUpdates() {
     const downloadUrl = data.zipball_url;
     const latestVersion = data.tag_name;
     const releaseUrl = data.html_url;
-    if (currentVersion < latestVersion) {
+    if (compareVersions(latestVersion, currentVersion) > 0) {
         console.log("Доступна новая версия", latestVersion, downloadUrl);
         const toastsContainer = document.querySelector(".toasts-container");
         /** @type {HTMLElement} */ // @ts-ignore
         const toast = document.querySelector('#toast-template').content.firstElementChild.cloneNode(true);
+        setClassIf(toast, 'toast-down', true)
         // @ts-ignore
         toast.querySelector(".toast-close").addEventListener("click", () => {
             toastsContainer.removeChild(toast);
@@ -1184,6 +1185,40 @@ addPositionForm.addEventListener("submit", (e) => {
         });
 
     return false;
+});
+
+const addAllTickerButton = addPositionForm.querySelector(".button-all-tickers");
+addAllTickerButton.addEventListener("click", async() => {
+    const spinner = addAllTickerButton.querySelector(".spinner-border");
+    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    try {
+        setClassIf(spinner, 'd-none', false);
+        const operations = await portfolio.loadOperations()
+        await portfolio.operationsRepository.putMany(operations);
+        /** @type {{[figi: string]: import("./storage/operationsRepository.js").Operation[]}} */
+        const groups = operations
+            .filter(item => ["Buy", "BuyCard", "Sell"].includes(item.operationType))
+            .filter(item => item.status == 'Done')
+            .filter(item => item.figi)
+            .reduce((groups, item) => {
+                (groups[item.figi] = groups[item.figi] || []).push(item);
+                return groups;
+            }, {});
+        for (let figi in groups) {
+            try {
+                const position = await portfolio.findPosition(figi);
+                portfolio.addPosition(position);
+                await portfolio.updateFills(position, groups[figi]);
+            }
+            catch {}
+        }
+        portfolio.sortPositions();
+        // @ts-ignore
+        $('#add-position-modal').modal('hide');
+    }
+    finally {
+        setClassIf(spinner, 'd-none', true);
+    }
 });
 
 // #endregion

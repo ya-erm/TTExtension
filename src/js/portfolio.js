@@ -388,6 +388,16 @@ export class Portfolio {
         }
         return position;
     }
+    
+    /**
+     * Добавление позиции в список позиций
+     * @param {Position} position 
+     */
+    addPosition(position) {
+        if (!this.positions.includes(position)) {
+            this.positions.push(position);
+        }
+    }
 
     /**
      * Удалить позицию из списка позиций
@@ -477,11 +487,8 @@ export class Portfolio {
         const operations = await TTApi.loadOperationsByFigi(figi, this.account);
         await this.operationsRepository.putMany(operations);
         const position = await this.findPosition(figi);
-
-        if (!this.positions.includes(position)) {
-            this.positions.push(position);
-            this.sortPositions();
-        }
+        this.addPosition(position);
+        this.sortPositions();
 
         return await this.updateFills(position, operations);
     }

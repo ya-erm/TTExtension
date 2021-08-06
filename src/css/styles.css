@@ -231,7 +231,9 @@
 }
 
 .toasts-overlay {
-    position: absolute;
+    z-index: 20;
+    pointer-events: none;
+    position: fixed;
     top: 0;
     left: 0;
     bottom: 0;
@@ -243,6 +245,7 @@
     align-items: center;
     flex-direction: column;
     margin: 0 auto;
+    margin-top: 5px;
 }
 
 .toast-message {
@@ -260,7 +263,6 @@
     position: relative;
     display: flex;
     align-items: center;
-    z-index: 20;
 }
 
 .toast-message a {
@@ -308,4 +310,8 @@
 .toast-message button.toast-close {
     padding: 0 8px;
     font-size: 20px;
+}
+
+.toast-down {
+    animation: down 0.2s forwards;
 }
