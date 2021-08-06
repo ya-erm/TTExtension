@@ -262,6 +262,15 @@ function addPositionRow(portfolio, position) {
     // @ts-ignore
     cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
 
+    const bookMarkButton = cellAsset.querySelector(".portfolio-asset-bookmark");
+    setClassIf(bookMarkButton, "portfolio-asset-bookmark-active", position.isFavourite);
+    bookMarkButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        position.isFavourite = !position.isFavourite;
+        setClassIf(bookMarkButton, "portfolio-asset-bookmark-active", position.isFavourite);
+        TTApi.savePortfolios();
+    })
+
     fillPositionRow(portfolio, positionRow, position);
 
     const tbody = document.querySelector(`#portfolio-${portfolio.id}-table tbody.positions-${position.instrumentType.toLowerCase()}`);

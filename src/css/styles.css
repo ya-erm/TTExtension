@@ -11,6 +11,7 @@
     
     background-color: white;
     -webkit-mask: url("x.svg") no-repeat center;
+    mask: url("x.svg") no-repeat center;
     /* background-image: url("x.svg") no-repeat center; */
 }
 
@@ -91,6 +92,37 @@
     visibility: visible;
 }
 
+.portfolio-asset-bookmark {
+    margin-left: -6px;
+    visibility: hidden;
+    /* transform: rotate(-90deg) scaleX(1.25) scaleY(0.8);  */
+    width: 12px;
+    height: 16px;
+    background-color: #51535D;
+    -webkit-mask: url("bookmark.svg") no-repeat center;
+    mask: url("bookmark.svg") no-repeat center;
+    transform: scale(0.8);
+    flex-shrink: 0;
+}
+
+.portfolio-asset-bookmark:hover {
+    background-color: #5E606A;
+}
+
+.portfolio-asset:hover .portfolio-asset-bookmark {
+    visibility: visible;
+}
+
+.portfolio-asset-bookmark.portfolio-asset-bookmark-active {
+    /* background-color: #EC5F59; */
+    background-color:  #DF5B55;
+    visibility: visible;
+}
+
+.portfolio-asset-bookmark.portfolio-asset-bookmark-active:hover {
+    /* background-color: #dc3545; */
+    background-color: #E15241;
+}
 /* Animations */
 
 .animation-fade {
@@ -199,15 +231,14 @@
     z-index: 10;
     color: var(--white);
     background-color: var(--dark);
-    box-shadow: 0 0 0 0.5px #454d55;
 }
 
 .thead-sticky th {
-    top: 0;
+    top: -1px;
 }
 
 .tfoot-sticky td {
-    bottom: 0;
+    bottom: -1px;
 }
 
 .link {

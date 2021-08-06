@@ -65,6 +65,9 @@ export class Position {
 
         /** @type {import("./TTApi").Order[]} список активных заявок */
         this.orders = [];
+
+        /** @type {boolean?} true, если тикер находится в избранном */
+        this.isFavourite = false;
     }
 }
 
