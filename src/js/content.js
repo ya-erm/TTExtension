@@ -127,22 +127,3 @@ function printMoney(value, currency, withSign = false) {
     const sign = (withSign && value > 0 ? '+' : '')
     return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${mapCurrency(currency)}`;
 }
-
-// #region Utilities
-
-/**
-  * Включить/выключить CSS класс для элемента по условию
-  * @param {object} element - HTML элемент
-  * @param {string} className - Название класса
-  * @param {boolean} condition - Условие, при выполнении которого класс будет применён
-  */
-function setClassIf(element, className, condition) {
-    if (!condition && element.classList.contains(className)) {
-        element.classList.remove(className);
-    }
-    else if (condition && !element.classList.contains(className)) {
-        element.classList.add(className);
-    }
-}
-
-//#endregion

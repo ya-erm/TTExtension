@@ -538,7 +538,7 @@ export class Portfolio {
                     fill.quantityExecuted = item.quantityExecuted;
                     fillUpdated = true;
                 }
-                if (fill.trades?.length != item.trades.length) {
+                if (fill.trades?.length != item.trades?.length) {
                     fill.trades = item.trades;
                     fillUpdated = true;
                 }

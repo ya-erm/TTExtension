@@ -71,11 +71,16 @@ export function mapInstrumentType(type) {
   * @param {boolean} condition - Условие, при выполнении которого класс будет применён
   */
 export function setClassIf(element, className, condition) {
-    if (!condition && element.classList.contains(className)) {
-        element.classList.remove(className);
+    try {
+        if (!condition && element.classList.contains(className)) {
+            element.classList.remove(className);
+        }
+        else if (condition && !element.classList.contains(className)) {
+            element.classList.add(className);
+        }
     }
-    else if (condition && !element.classList.contains(className)) {
-        element.classList.add(className);
+    catch(error) {
+        console.error(element, className, condition, error);
     }
 }
 

@@ -4,10 +4,11 @@ import { showConfirm } from "./confirm.js";
 import { Fill } from "./fill.js";
 import { Portfolio } from "./portfolio.js";
 import { Position } from "./position.js";
+import getFillsRepository from "./storage/fillsRepository.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
-import { TTApi } from "./TTApi.js";
+import { drawQueueStatus, TTApi } from "./TTApi.js";
 import { compareVersions, convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
 
 async function checkForUpdates() {
@@ -510,7 +511,10 @@ function addPositionSummaryRow(portfolio) {
     setClassIf(cellFixedPnL, "cursor-pointer", true);
 
     const assetCell = positionRow.querySelector("td.portfolio-asset");
-    assetCell.innerHTML = '<a href="#" class="btn-link">Operations</a>';
+    assetCell.innerHTML = '<div class="d-flex justify-content-between">' +
+        '<a href="#" class="btn-link">Operations</a>' +
+        '<div class="requests-queue d-none"><div class="spinner-border" role="status"><i class="sr-only"></i></div><span></span></div>' +
+        '</div>';
     assetCell.addEventListener("click", onOperationsLinkClick);
 
     /** @type {HTMLTableCellElement} */
@@ -526,6 +530,7 @@ function addPositionSummaryRow(portfolio) {
 
     const tfoot = document.querySelector(`#portfolio-${portfolio.id}-table tfoot.positions-summary-row`);
     tfoot.appendChild(positionRow);
+    drawQueueStatus();
 
     const totalCostSpanPrev = document.querySelector(".portfolio-total-cost");
     /** @type {HTMLElement} */ //@ts-ignore
@@ -1068,7 +1073,7 @@ updateIntervalInput.addEventListener("change", (e) => {
 });
 
 const eraseButton = document.getElementById("erase-button");
-eraseButton.addEventListener("click", () => {
+eraseButton.addEventListener("click", (e) => {
     // Очищаем хранилище и страницу
     localStorage.clear();
     //@ts-ignore
@@ -1085,10 +1090,12 @@ eraseButton.addEventListener("click", () => {
         });
     document.querySelector(".portfolio-total-cost").innerHTML = "";
     getOperationsRepository("").dropDatabase();
+    getFillsRepository("").dropDatabase();
     instrumentsRepository.dropDatabase();
     TTApi.eraseData();
     // Скрываем кнопку очистки хранилища
-    setClassIf(eraseButton, "d-none", true);
+    setClassIf(e.target, "d-none", true);
+    close();
 });
 
 /**

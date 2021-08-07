@@ -1,6 +1,7 @@
 // @ts-check
 import { Portfolio } from "./portfolio.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
+import { setClassIf } from "./utils.js";
 
 const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
@@ -42,32 +43,184 @@ export const TTApi = {
     eraseData,
     httpGet,
     httpPost,
+
+    /** @type {{[resource: string]: number}} */
+    requests : {},
+
+    /** @typedef QueuedRequest
+     * @property {(data: any) => void} resolve
+     * @property {(error: any) => void} reject
+     */
+    /** @typedef QueuedRequestsGroup
+     * @property {number} priority
+     * @property {Array<QueuedRequest>} promises
+     */
+    /** @type {{[resource: string]: {[path: string]: QueuedRequestsGroup}}} */
+    queue: {},
 };
 
 // @ts-ignore
 window.TTApi = TTApi;
 
-/**
- * Очистить все данные
- */
+/** Очистить все данные */
 function eraseData() {
     TTApi.token = undefined;
     TTApi.currencyRates = {};
     TTApi.portfolios = [];
 }
 
-/**
- * Сохранить портфели
- */
+/** Сохранить портфели */
 function savePortfolios() {
     localStorage.setItem("portfolios", JSON.stringify(TTApi.portfolios));
+}
+
+/** Ограничения */
+const requestLimits = {
+    portfolio: 120,
+    market: 240,
+    orders: 100,
+    operations: 120,
+    default: 100,
+}
+
+/** Отрисовка состояния очереди */
+export function drawQueueStatus() {
+    document.querySelectorAll(".requests-queue").forEach(container => {
+        const span = container.querySelector("span");
+        let title = "Requests in queue:\n";
+        const workload = Object.entries(TTApi.queue).reduce((acc, [resource, pathsQueue]) => {
+            acc[resource] = Object.keys(pathsQueue).length;
+            title += `/${resource}: ${acc[resource]} requests\n`;
+            return acc;
+        }, {});
+        const totalWorkload = Object.values(workload).reduce((acc, item) => acc + item, 0);
+        setClassIf(container, "d-none", totalWorkload <= 0);
+        if (totalWorkload > 0) {
+            span.textContent = "Q: " + totalWorkload;
+            // @ts-ignore
+            span.title = title.trimEnd();
+        } else {
+            span.textContent = "";
+            span.title = "";
+        }
+    });
+}
+
+/**
+ * Добавить запрос в очередь
+ * @param {string} resource - ресурс
+ * @param {string} path - относительный адрес
+ * @param {number} priority - приоритет
+ * @returns {Promise<any>}
+ */
+function addToQueue(resource, path, priority) {
+    return new Promise((resolve, reject) => {
+        if (!TTApi.queue[resource]) {
+            TTApi.queue[resource] = {};
+        }
+        if (!TTApi.queue[resource][path]) {
+            TTApi.queue[resource][path] = { priority, promises: [] };
+        }
+        TTApi.queue[resource][path].priority = priority;
+        TTApi.queue[resource][path].promises.push({ resolve, reject });
+        drawQueueStatus();
+    });
+}
+
+/**
+ * Обработка очереди
+ * @param {string} resource
+ */
+async function processQueue (resource) {
+    // Обрабатываем очередь этого же ресурса
+    const pathsQueue = TTApi.queue[resource] ?? {};
+    // Извлекаем первый запрос из очереди
+    const keyValuePair = Object.entries(pathsQueue).sort((a, b) => a[1].priority - b[1].priority).shift()
+    if (!keyValuePair) { return; }
+    const [path, requestsGroup] = keyValuePair;
+    delete pathsQueue[path];
+    TTApi.queue[resource] = pathsQueue;
+    drawQueueStatus();
+    console.log("Запрос из очереди", path, 
+        "приоритет:", requestsGroup.priority, 
+        "в группе:", requestsGroup.promises.length, 
+        "в очереди:", Object.keys(pathsQueue).length, "групп");
+    await _httpGet(path)
+        .then(response => {
+            requestsGroup.promises.forEach(promise => {
+                promise.resolve(response);
+            });
+        })
+        .catch(error => {
+            console.log("Запрос из очереди", path, "завершился с ошибкой", error);
+            if (error.code == 429) {  // Too many requests
+                // Возвращаем группу в очередь
+                TTApi.queue[resource][path] = requestsGroup;
+                processTooManyRequest(resource);
+            } else {
+                requestsGroup.promises.forEach(promise => {
+                    promise.reject(error);
+                });
+            }
+        });
+}
+
+/**
+ * Обработка ошибки 429 Too many request
+ * @param {string} resource 
+ */
+function processTooManyRequest(resource) {
+    const limit = requestLimits[resource] ?? requestLimits.default;
+    const overload = limit - TTApi.requests[resource];
+    TTApi.requests[resource] = limit;
+    console.log(`Превышено количество запросов ${resource}, overload:`, overload);
+    if (overload == 0) { return; }
+    setTimeout(() => {
+        TTApi.requests[resource] -= overload;
+        for(let i = 0; i < overload; i++) {
+            processQueue(resource);
+        }
+    }, 60 * 1000);
+}
+
+/**
+ * Отправить HTTP GET запрос к API с учетом очереди и приоритетов 
+ * @param {string} path - относительный адрес
+ * @param {number?} priority - приоритет
+ */
+async function httpGet(path, priority = 0) {
+    const resource = path.split("?")[0].split("/")[1];
+    const workload = (TTApi.requests[resource] ?? 0);
+    const limit = requestLimits[resource] ?? requestLimits.default;
+    const queueLength = Object.keys(TTApi.queue[resource]?? {}).length;
+    if (workload + 1 > limit) {
+        console.log(`Превышено количество запросов /${resource} (лимит: ${limit}),`, "в очереди:", queueLength);
+        return addToQueue(resource, path, priority);
+    }
+    TTApi.requests[resource] = workload + 1;
+    try {
+        const result = await _httpGet(path);
+        setTimeout(() => {
+            TTApi.requests[resource] -= 1;
+            processQueue(resource);
+        }, 60 * 1000);
+        return result;
+    }
+    catch(error) {
+        if (error.code == 429) {  // Too many requests
+            processTooManyRequest(resource);
+            return addToQueue(resource, path, priority);
+        } else {
+            return Promise.reject(error);
+        }
+    }
 }
 
 /**
  * Отправить HTTP GET запрос к API
  * @param {string} path - относительный адрес
  */
-async function httpGet(path) {
+async function _httpGet(path) {
     const response = await fetch(apiURL + path, { headers: { Authorization: 'Bearer ' + TTApi.token } });
     if (response.status == 200) {
         const data = await response.json();
@@ -136,8 +289,8 @@ async function loadAccounts() {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<CurrencyPosition[]>}
  */
-async function loadCurrencies(account = undefined) {
-    const payload = await httpGet("/portfolio/currencies" + (!!account ? `?brokerAccountId=${account}` : ""));
+async function loadCurrencies(account) {
+    const payload = await httpGet(`/portfolio/currencies?brokerAccountId=${account}`);
     return payload.currencies;
 }
 
@@ -160,8 +313,8 @@ async function loadCurrencies(account = undefined) {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<PortfolioPosition[]>}
  */
-async function loadPortfolio(account = undefined) {
-    const payload = await httpGet("/portfolio" + (!!account ? `?brokerAccountId=${account}` : ""));
+async function loadPortfolio(account) {
+    const payload = await httpGet(`/portfolio?brokerAccountId=${account}`);
     return payload.positions;
 }
 
@@ -171,12 +324,12 @@ async function loadPortfolio(account = undefined) {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<Operation[]>}
  */
-async function loadOperationsByFigi(figi, account = undefined) {
+async function loadOperationsByFigi(figi, account) {
     const fromDate = encodeURIComponent('2000-01-01T00:00:00Z');
     const toDate = encodeURIComponent(new Date().toISOString());
     const payload = await httpGet(`/operations?from=${fromDate}&to=${toDate}`
         + (!!figi ? `&figi=${figi}` : "")
-        + (!!account ? `&brokerAccountId=${account}` : ""));
+        + `&brokerAccountId=${account}`);
     return payload.operations.map(item => ({ ...item, account }));
 }
 
@@ -406,9 +559,9 @@ async function getCurrencyRate(currency) {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<Order>}
  */
-async function placeLimitOrder(figi, body, account = undefined) {
+async function placeLimitOrder(figi, body, account) {
     /** @type {PlaceLimitOrderResponse} */
-    const payload = await httpPost(`/orders/limit-order?figi=${figi}` + (!!account ? `&brokerAccountId=${account}` : ""), body);
+    const payload = await httpPost(`/orders/limit-order?figi=${figi}&brokerAccountId=${account}`, body);
     
     if (payload.rejectReason) {
         throw new Error(payload.message);

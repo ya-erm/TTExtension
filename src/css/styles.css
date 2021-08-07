@@ -123,6 +123,26 @@
     /* background-color: #dc3545; */
     background-color: #E15241;
 }
+
+.requests-queue {
+    display: flex;
+    align-items: center;
+    color: var(--warning);
+    font-size: 0.8em;
+    cursor: help;
+}
+
+.requests-queue span {
+    margin-left: 5px;
+}
+
+.requests-queue .spinner-border {
+    display: none;
+    border-width: 0.1em;
+    height: 0.8em;
+    width: 0.8em;
+}
+
 /* Animations */
 
 .animation-fade {
