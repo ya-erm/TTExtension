@@ -358,9 +358,10 @@
     color: white;
 }
 
-.toast-message button.toast-close {
-    padding: 0 8px;
+.toast-message button.toast-close span {
+    padding: 0 2px;
     font-size: 20px;
+    line-height: 1;
 }
 
 .toast-down {

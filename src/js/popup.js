@@ -31,8 +31,11 @@ async function checkForUpdates() {
             toastsContainer.removeChild(toast);
         });
         toast.querySelector(".toast-text").innerHTML = `
-            <span class="mr-1">Доступна новая версия <a href="${releaseUrl}" target="_blank">${latestVersion}</a></span>
-            <a href="${downloadUrl}" target="_blank"><button>Скачать</button></a>`;
+            <span class="mr-1">New version is available <a href="${releaseUrl}" target="_blank">${latestVersion}</a></span>
+            <a href="${downloadUrl}" target="_blank"><button title="Download"><i class="fa fa-download"></i></button></a>
+            <button id="refresh" title="Reload extension"><i class="fa fa-refresh"></i></button>`;
+        // @ts-ignore
+        toast.querySelector("#refresh").addEventListener('click', () => chrome.runtime.reload())
         toastsContainer.appendChild(toast);
     }
 }
