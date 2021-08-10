@@ -231,6 +231,12 @@ export class Portfolio {
             // Сравнение по типу инструмента
             let compareByType = a.instrumentType.localeCompare(b.instrumentType);
             if (compareByType != 0) { return compareByType; }
+            // Сравнение по избранному
+            if (!a.isFavourite && b.isFavourite) { return 1 };
+            if (!b.isFavourite && a.isFavourite) { return -1 };
+            if (a.isFavourite && b.isFavourite) { 
+                return a.ticker.localeCompare(b.ticker) 
+            };
             // Сравнение по количеству (zero/non-zero)
             if (a.count == 0 && b.count != 0) { return 1 };
             if (b.count == 0 && a.count != 0) { return -1 };

@@ -269,7 +269,9 @@ function addPositionRow(portfolio, position) {
         e.stopPropagation();
         position.isFavourite = !position.isFavourite;
         setClassIf(bookMarkButton, "portfolio-asset-bookmark-active", position.isFavourite);
+        portfolio.sortPositions();
         TTApi.savePortfolios();
+        drawPositions(portfolio);
     })
 
     fillPositionRow(portfolio, positionRow, position);
