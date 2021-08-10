@@ -359,7 +359,7 @@ async function fillPositionRow(portfolio, positionRow, position) {
                     `Actual value: ${printMoney(position.average, null, false, precision)}`;
         });
     } else {
-        cellAverage.title = "";
+        cellAverage.title = printMoney(position.average, position.currency, false, 2);
     }
 
     /** @type {HTMLElement} */
@@ -375,6 +375,7 @@ async function fillPositionRow(portfolio, positionRow, position) {
         : "";
     setClassIf(cellCost, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
 
+    /** @type {HTMLElement} */
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     if (position.count != 0) {
         if (portfolio.settings.expectedUnit == "Percents") {
@@ -383,6 +384,7 @@ async function fillPositionRow(portfolio, positionRow, position) {
         } else {
             cellExpected.textContent = printMoney(expected, position.currency, true);
         }
+        cellExpected.title = printMoney(position.expected, position.currency, true);
         cellExpected.className = getMoneyColorClass(expected);
         setClassIf(cellExpected, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
     } else {

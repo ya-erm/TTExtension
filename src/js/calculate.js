@@ -89,10 +89,10 @@ export function processFill(accumulated, fill) {
     let { currentQuantity, totalFixedPnL, averagePrice, averagePriceCorrected } = accumulated;
 
     const price = fill.price;
-    const cost = -fill.payment;
     const quantity = fill.quantityExecuted;
     const commission = Math.abs(fill.commission) || 0;
     const direction = -Math.sign(fill.payment)
+    const cost = direction * price * quantity;
     const costCorrected = cost + commission;
 
     let sumUp = currentQuantity * (averagePrice || 0) + cost;

@@ -306,6 +306,7 @@ async function loadCurrencies(account) {
  * @property {number?} blocked
  * @property {{currency: string, value: number}?} expectedYield
  * @property {{currency: string, value: number}?} averagePositionPrice
+ * @property {{currency: string, value: number}?} averagePositionPriceNoNkd
  */
 
 /**
@@ -320,14 +321,16 @@ async function loadPortfolio(account) {
 
 /**
  * Загрузить операции
- * @param {string} figi - идентификатор
+ * @param {string | undefined} figi - идентификатор
  * @param {string} account - идентификатор счёта
+ * @param {Date} fromDate - начало интервала
+ * @param {Date} toDate - окончание интервала
  * @returns {Promise<Operation[]>}
  */
-async function loadOperationsByFigi(figi, account) {
-    const fromDate = encodeURIComponent('2000-01-01T00:00:00Z');
-    const toDate = encodeURIComponent(new Date().toISOString());
-    const payload = await httpGet(`/operations?from=${fromDate}&to=${toDate}`
+async function loadOperationsByFigi(figi, account, fromDate = undefined, toDate = undefined) {
+    const from = encodeURIComponent(fromDate?.toISOString() ?? '2000-01-01T00:00:00Z');
+    const to = encodeURIComponent(toDate?.toISOString() ?? new Date().toISOString());
+    const payload = await httpGet(`/operations?from=${from}&to=${to}`
         + (!!figi ? `&figi=${figi}` : "")
         + `&brokerAccountId=${account}`);
     return payload.operations.map(item => ({ ...item, account }));

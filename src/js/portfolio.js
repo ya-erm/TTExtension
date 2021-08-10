@@ -133,7 +133,8 @@ export class Portfolio {
         let created = 0;
         let updated = 0;
         items.forEach(item => {
-            const lastPrice = item.expectedYield?.value / item.balance + item.averagePositionPrice?.value;
+            const averagePrice = item.instrumentType == 'Bond' ? item.averagePositionPriceNoNkd?.value : item.averagePositionPrice?.value;
+            const lastPrice = item.expectedYield?.value / item.balance + averagePrice
             // Находим существующую позицию в портфеле или создаём новую
             let position = this.positions.find(_ => _.figi === item.figi);
             if (!position) {
@@ -150,7 +151,19 @@ export class Portfolio {
             position.lastPriceUpdated = now;
             if (position.lastPrice !== lastPrice) {
                 position.lastPrice = lastPrice;
-                position.expected = (position.lastPrice - position.average) * position.count;
+                changed = true;
+            }
+            if (position.average != averagePrice) {
+                position.average = averagePrice;
+                changed = true;
+            }
+            if (position.expected != item.expectedYield?.value) {
+                position.calculatedExpected = (position.lastPrice - position.calculatedAverage) * position.calculatedCount;                changed = true;
+                position.expected = item.expectedYield?.value;
+                if (position.currency == 'RUB' && Math.abs(position.calculatedExpected - position.expected) > 100 ||
+                    position.currency != 'RUB' && Math.abs(position.calculatedExpected - position.expected) > 1) {
+                    position.needCalc = true;
+                }
                 changed = true;
             }
             if (changed) {
@@ -332,6 +345,7 @@ export class Portfolio {
                     blocked: undefined,
                     expectedYield: undefined,
                     averagePositionPrice: undefined,
+                    averagePositionPriceNoNkd: undefined,
                 });
                 position.currency = item.currency;
                 position.lastPrice = lastPrice;
@@ -351,15 +365,14 @@ export class Portfolio {
      * Просчитать для позиций среднюю стоимость и зафиксированную прибыль
      */
     async calculatePositions() {
-        const needCalcPositions = this.positions.filter(_ => _.needCalc);
-        console.log(`Calculating ${needCalcPositions.length} positions`);
-        needCalcPositions.forEach(async position => {
-            // Загружаем список операций по инструменту
-            const operations = await TTApi.loadOperationsByFigi(position.figi, this.account);
-
-            if (operations.length > 0) {
-                this.operationsRepository.putMany(operations);
-                await this.updateFills(position, operations);
+        const now = new Date();
+        const lastYear = new Date(now.setFullYear(now.getFullYear() - 1));
+        const operations =  await TTApi.loadOperationsByFigi(undefined, this.account, lastYear);
+        this.positions.forEach(async position => {
+            const positionOperations = operations.filter(x => x.figi == position.figi);
+            if (positionOperations.length > 0) {
+                this.operationsRepository.putMany(positionOperations);
+                await this.updateFills(position, positionOperations);
             }
         });
     }
@@ -383,6 +396,7 @@ export class Portfolio {
                 blocked: undefined,
                 expectedYield: undefined,
                 averagePositionPrice: undefined,
+                averagePositionPriceNoNkd: undefined,
             });
             position.currency = item.currency;
         }
@@ -542,10 +556,18 @@ export class Portfolio {
                     fill.trades = item.trades;
                     fillUpdated = true;
                 }
+                if (fill.payment != item.payment) {
+                    fill.payment = item.payment;
+                    fillUpdated = true;
+                }
                 if (fillUpdated) {
                     updated++;
                 }
             });
+
+        if (created == 0 && updated == 0) {
+            return fills;
+        }
 
         let currentQuantity = 0;
         let totalFixedPnL = 0;
