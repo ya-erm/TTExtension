@@ -8,6 +8,11 @@ export function mapCurrency(currency) {
         case "RUB": return "₽";
         case "USD": return "$";
         case "EUR": return "€";
+        case "GBP": return "£";
+        case "TRY": return "₺";
+        case "CHF": return "₣";
+        case "JPY": return "¥";
+        case "CNY": return "元";
         default: return currency;
     }
 }
