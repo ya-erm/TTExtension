@@ -11,7 +11,7 @@ import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
 import { drawQueueStatus, TTApi } from "./TTApi.js";
 import { compareVersions, convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
 
-async function checkForUpdates() {
+async function checkForUpdatesAsync() {
     // @ts-ignore
     const manifest = chrome.runtime.getManifest();
     const currentVersion = manifest.version;
@@ -40,16 +40,16 @@ async function checkForUpdates() {
     }
 }
 
-checkForUpdates();
+checkForUpdatesAsync();
 
 let selectedPortfolio = localStorage.getItem("selectedPortfolio");
 
-async function main() {
+async function mainAsync() {
     if (!!TTApi.token) {
         // @ts-ignore
         document.getElementById("token-input").value = TTApi.token;
 
-        await TTApi.getCurrencyRate("USD");
+        await TTApi.getCurrencyRateAsync("USD");
 
         // Создаём вкладки для каждого портфеля
         TTApi.portfolios.forEach(portfolio => {
@@ -63,7 +63,7 @@ async function main() {
         });
 
         // Запрашиваем список счетов
-        const accounts = await TTApi.loadAccounts();
+        const accounts = await TTApi.loadAccountsAsync();
         // Создаём портфель для каждого счёта, если он ещё не существует
         accounts.forEach(account => {
             if (!TTApi.portfolios.find(_ => _.account == account.brokerAccountId)) {
@@ -86,7 +86,7 @@ async function main() {
         }
 
         // Загружаем новые позиции и обновляем таблицу
-        loopLoadPortfolio();
+        loopLoadPortfolioAsync();
     } else {
         // Открываем вкладку настроек    
         openTab("settings");
@@ -95,7 +95,7 @@ async function main() {
     }
 }
 
-main();
+mainAsync();
 
 // #region Positions
 
@@ -131,7 +131,7 @@ function drawPositions(portfolio) {
                 });
         }
     });
-    addPositionSummaryRow(portfolio);
+    addPositionSummaryRowAsync(portfolio);
     sortPositionsTable(portfolio);
 }
 
@@ -166,7 +166,7 @@ function createPortfolioTab(portfolio) {
     tab.addEventListener("click", () => {
         selectPortfolio(portfolio);
         drawPositions(portfolio);
-        loopLoadPortfolio();
+        loopLoadPortfolioAsync();
     });
     tabPane.querySelector("table").id = `portfolio-${portfolio.id}-table`;
 
@@ -194,7 +194,7 @@ window.addEventListener("PositionUpdated", (event) => {
     const { position } = event.detail;
     const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
     addOrUpdatePosition(portfolio, position);
-    addPositionSummaryRow(portfolio);
+    addPositionSummaryRowAsync(portfolio);
 });
 
 // Обработчик события удаления позиции
@@ -203,13 +203,13 @@ window.addEventListener("PositionRemoved", function (event) {
     const { position } = event.detail;
     const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
     document.querySelector(`#portfolio-${portfolio.id}_position-${position.figi}`)?.remove();
-    addPositionSummaryRow(portfolio);
+    addPositionSummaryRowAsync(portfolio);
 });
 
 /**
  * Загрузка портфеля
  */
-async function loadPortfolio() {
+async function loadPortfolioAsync() {
     const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio);
     if (portfolio != undefined) {
         await portfolio.loadPositions();
@@ -220,12 +220,12 @@ async function loadPortfolio() {
 /**
  * Циклическая загрузка портфеля 
 */
-function loopLoadPortfolio() {
-    loadPortfolio();
+async function loopLoadPortfolioAsync() {
+    await loadPortfolioAsync();
     if (positionsUpdateTimerId != undefined) {
         clearTimeout(positionsUpdateTimerId)
     }
-    positionsUpdateTimerId = setInterval(loadPortfolio, updateIntervalTimeout);
+    positionsUpdateTimerId = setInterval(loadPortfolioAsync, updateIntervalTimeout);
 }
 
 /**
@@ -239,7 +239,7 @@ function addOrUpdatePosition(portfolio, position) {
         if (!positionRow) {
             addPositionRow(portfolio, position);
         } else {
-            fillPositionRow(portfolio, positionRow, position);
+            fillPositionRowAsync(portfolio, positionRow, position);
         }
     } else if (positionRow) {
         document.querySelector(`#portfolio-${portfolio.id}_position-${position.figi}`)?.remove();
@@ -277,7 +277,7 @@ function addPositionRow(portfolio, position) {
         drawPositions(portfolio);
     })
 
-    fillPositionRow(portfolio, positionRow, position);
+    fillPositionRowAsync(portfolio, positionRow, position);
 
     const tbody = document.querySelector(`#portfolio-${portfolio.id}-table tbody.positions-${position.instrumentType.toLowerCase()}`);
     if (!tbody.querySelector(".group-row")) {
@@ -308,7 +308,7 @@ function isInaccurateValue(position) {
   * @param {HTMLElement} positionRow - строка таблицы
   * @param {Position} position - позиция
   */
-async function fillPositionRow(portfolio, positionRow, position) {
+async function fillPositionRowAsync(portfolio, positionRow, position) {
     if (position.count == 0) {
         if (!positionRow.querySelector(".portfolio-asset-button-remove")) {
             /** @type {HTMLElement} */ // @ts-ignore
@@ -401,7 +401,7 @@ async function fillPositionRow(portfolio, positionRow, position) {
         cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
     } else {
-        const fixedPnLToday = await getTodayFixedPnL(portfolio, position);
+        const fixedPnLToday = await getTodayFixedPnLAsync(portfolio, position);
         cellFixedPnL.textContent = printMoney(fixedPnLToday, position.currency, true);
         cellFixedPnL.className = getMoneyColorClass(fixedPnLToday);
     }
@@ -412,7 +412,7 @@ async function fillPositionRow(portfolio, positionRow, position) {
  * @param {Portfolio} portfolio
  * @param {Position} position
  */
-async function getTodayFixedPnL(portfolio, position) {
+async function getTodayFixedPnLAsync(portfolio, position) {
     const now = new Date();
     const fills = await portfolio.fillsRepository.getAllByFigi(position.figi);
     const fillsToday = fills.filter(fill => {
@@ -432,7 +432,7 @@ async function getTodayFixedPnL(portfolio, position) {
  * Добавить итоговую строку по позициям
  * @param {Portfolio} portfolio
  */
-function addPositionSummaryRow(portfolio) {
+async function addPositionSummaryRowAsync(portfolio) {
     let positionRow = document.getElementById(`portfolio-${portfolio.id}_position-summary`);
     if (positionRow) { positionRow.remove(); }
     /** @type {HTMLElement} */ //@ts-ignore
@@ -458,7 +458,8 @@ function addPositionSummaryRow(portfolio) {
             RUB: Number
         }
     } */
-    const total = portfolio.positions.reduce((result, position) => {
+    const total = await portfolio.positions.reduce(async (resultAsync, position) => {
+        const result = await resultAsync;
         const inaccurateValue = isInaccurateValue(position);
         const count = inaccurateValue ? position.count : position.calculatedCount;
         const average = inaccurateValue ? position.average : position.calculatedAverage;
@@ -470,11 +471,11 @@ function addPositionSummaryRow(portfolio) {
         if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
             // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
             result.expected[position.currency] += (expected || 0);
-            const fixedPnL = (portfolio.settings.allDayPeriod == "All") ? position.fixedPnL : getTodayFixedPnL(portfolio, position);
+            const fixedPnL = (portfolio.settings.allDayPeriod == "All") ? position.fixedPnL : await getTodayFixedPnLAsync(portfolio, position);
             result.fixedPnL[position.currency] += (fixedPnL || 0);
         }
-        return result;
-    }, { cost: {}, expected: {}, fixedPnL: {} });
+        return Promise.resolve(result);
+    }, Promise.resolve({ cost: {}, expected: {}, fixedPnL: {} }));
 
     const selectedCurrency = localStorage["selectedCurrency"] || "RUB";
 
@@ -572,7 +573,7 @@ function changeSelectedCurrency(portfolio, selectedCurrency) {
         selectedCurrency = "RUB";
     }
     localStorage.setItem("selectedCurrency", selectedCurrency);
-    addPositionSummaryRow(portfolio);
+    addPositionSummaryRowAsync(portfolio);
 };
 
 /**
@@ -607,7 +608,7 @@ function onPositionClick(portfolio, position) {
             });
 
         // Отображаем панель торговли
-        drawTradingPanel(portfolio, position);
+        drawTradingPanelAsync(portfolio, position);
     }
     // Открываем вкладку
     openTab(tabId);
@@ -633,13 +634,13 @@ function onOperationsLinkClick() {
         // Отображаем операции из памяти
         getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter)
             .then(operations => {
-                drawSystemOperations(portfolio, operations);
+                drawSystemOperationsAsync(portfolio, operations);
             });
 
         // Загружаем новые операции и отображаем их
         portfolio.loadOperations()
             .then((operations) => {
-                drawSystemOperations(portfolio, operations);
+                drawSystemOperationsAsync(portfolio, operations);
                 setClassIf(loadingSpinner, "d-none", true);
             });
     }
@@ -792,7 +793,7 @@ function drawOperations(portfolio, position, fills) {
  * @param {Portfolio} portfolio
  * @param {import("./storage/operationsRepository.js").Operation[]} operations
  */
-async function drawSystemOperations(portfolio, operations) {
+async function drawSystemOperationsAsync(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
         .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
@@ -949,7 +950,7 @@ function drawOrders(portfolio, position) {
 
         deleteButton.addEventListener("click", async () => {
             try {
-                await TTApi.cancelOrder(item.orderId, portfolio.account);
+                await TTApi.cancelOrderAsync(item.orderId, portfolio.account);
                 tbody.removeChild(orderRow);
             } catch (e) {
                 console.error(`Не удалось отменить заявку #${item.orderId}`);
@@ -985,7 +986,7 @@ function drawOrders(portfolio, position) {
  * @param {Portfolio} portfolio 
  * @param {Position} position 
  */
-async function drawTradingPanel(portfolio, position) {
+async function drawTradingPanelAsync(portfolio, position) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
     const tradingPanel = document.querySelector(`#${tabId} .trading-panel`);
     const priceSpan = tradingPanel.querySelector(".trading-price");
@@ -1045,7 +1046,7 @@ async function drawTradingPanel(portfolio, position) {
             + `Lots: ${order.lots}\r\n`
             + `Cost: ${printMoney(order.price * order.lots, instrument.currency)}`,
             async () => {
-                const item = await TTApi.placeLimitOrder(position.figi, order, portfolio.account);
+                const item = await TTApi.placeLimitOrderAsync(position.figi, order, portfolio.account);
                 position.orders.push(item);
                 drawOrders(portfolio, position);
             }
@@ -1076,7 +1077,7 @@ updateIntervalInput.addEventListener("change", (e) => {
     updateIntervalTimeout = e.target.value * 1000;
     localStorage["positionsUpdateIntervalInput"] = updateIntervalTimeout;
     console.log(`Positions update interval changed. New value: ${updateIntervalTimeout} ms`)
-    loopLoadPortfolio();
+    loopLoadPortfolioAsync();
 });
 
 const eraseButton = document.getElementById("erase-button");
@@ -1150,7 +1151,7 @@ excludeCurrenciesFromTotalCheckbox.checked = (localStorage["excludeCurrenciesFro
 excludeCurrenciesFromTotalCheckbox.addEventListener("change", (e) => {
     // @ts-ignore
     localStorage.setItem("excludeCurrenciesFromTotal", e.target.checked);
-    addPositionSummaryRow(TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio));
+    addPositionSummaryRowAsync(TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio));
 });
 
 // #endregion
@@ -1170,7 +1171,7 @@ tokenForm.addEventListener("submit", (e) => {
 
     setClassIf(eraseButton, "d-none", false);
 
-    main();
+    mainAsync();
 
     return false;
 });
@@ -1204,7 +1205,7 @@ addPositionForm.addEventListener("submit", (e) => {
 
     // Загружаем сделки по инструменту
     portfolio.loadFillsByTicker(ticker)
-        .then(_ => TTApi.loadOrderbookByTicker(ticker))
+        .then(_ => TTApi.loadOrderbookByTickerAsync(ticker))
         .then(orderbook => {
             addPositionInput.value = "";
             // @ts-ignore
@@ -1310,7 +1311,7 @@ filterPositionsForm.addEventListener("submit", (e) => {
     applyFilterPositionsButtonStyle(portfolio);
 
     drawPositions(portfolio);
-    addPositionSummaryRow(portfolio);
+    addPositionSummaryRowAsync(portfolio);
 
     //@ts-ignore
     $('#filter-positions-modal').modal('hide');
@@ -1430,7 +1431,7 @@ filterOperationsForm.addEventListener("submit", async (e) => {
     const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
 
     const operations = await getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter);
-    drawSystemOperations(portfolio, operations);
+    drawSystemOperationsAsync(portfolio, operations);
 
     //@ts-ignore
     $('#filter-operations-modal').modal('hide');

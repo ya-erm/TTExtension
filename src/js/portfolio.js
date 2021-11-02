@@ -101,10 +101,10 @@ export class Portfolio {
     async loadPositions() {
         if (!!this.account) {
             // Загружаем позиции
-            const positions = await TTApi.loadPortfolio(this.account);
+            const positions = await TTApi.loadPortfolioAsync(this.account);
             this.updatePortfolio(positions);
             // Загружаем валютные позиции
-            const currencies = await TTApi.loadCurrencies(this.account);
+            const currencies = await TTApi.loadCurrenciesAsync(this.account);
             this.updateCurrencies(currencies);
             // Просчитываем позиции по сделкам
             this.calculatePositions();
@@ -114,7 +114,7 @@ export class Portfolio {
             this.positions
                 .filter(_ => _.count == 0)
                 .forEach(async position => {
-                    const orderbook = await TTApi.loadOrderbook(position.figi);
+                    const orderbook = await TTApi.loadOrderbookAsync(position.figi);
                     position.lastPrice = orderbook.lastPrice;
                     position.lastPriceUpdated = new Date();
                     window.dispatchEvent(new CustomEvent("PositionUpdated", { detail: { position } }));
@@ -373,7 +373,7 @@ export class Portfolio {
     async calculatePositions() {
         const now = new Date();
         const lastYear = new Date(now.setFullYear(now.getFullYear() - 1));
-        const operations =  await TTApi.loadOperationsByFigi(undefined, this.account, lastYear);
+        const operations =  await TTApi.loadOperationsByFigiAsync(undefined, this.account, lastYear);
         this.positions.forEach(async position => {
             const positionOperations = operations.filter(x => x.figi == position.figi);
             if (positionOperations.length > 0) {
@@ -390,7 +390,7 @@ export class Portfolio {
     async findPosition(figi) {
         let position = this.positions.find(_ => _.figi == figi);
         if (!position) {
-            const item = await TTApi.findInstrumentByFigi(figi);
+            const item = await TTApi.findInstrumentByFigiAsync(figi);
             position = new Position(this.id, {
                 ticker: item.ticker,
                 name: item.name,
@@ -472,14 +472,14 @@ export class Portfolio {
             || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
 
         if (!figi) {
-            const item = await TTApi.loadInstrumentByTicker(ticker);
+            const item = await TTApi.loadInstrumentByTickerAsync(ticker);
             if (!item) {
                 throw new Error("Instrument not found");
             }
             figi = item.figi;
         }
 
-        const orders = await TTApi.loadOrdersByFigi(figi, this.account);
+        const orders = await TTApi.loadOrdersByFigiAsync(figi, this.account);
         return orders;
     }
 
@@ -497,14 +497,14 @@ export class Portfolio {
             || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
 
         if (!figi) {
-            const item = await TTApi.loadInstrumentByTicker(ticker);
+            const item = await TTApi.loadInstrumentByTickerAsync(ticker);
             if (!item) {
                 throw new Error("Instrument not found");
             }
             figi = item.figi;
         }
 
-        const operations = await TTApi.loadOperationsByFigi(figi, this.account);
+        const operations = await TTApi.loadOperationsByFigiAsync(figi, this.account);
         await this.operationsRepository.putMany(operations);
         const position = await this.findPosition(figi);
         this.addPosition(position);
@@ -517,7 +517,7 @@ export class Portfolio {
      * Загрузить все операции
      */
     async loadOperations() {
-        const operations = await TTApi.loadOperationsByFigi(undefined, this.account);
+        const operations = await TTApi.loadOperationsByFigiAsync(undefined, this.account);
         this.operationsRepository.putMany(operations);
         return operations;
     }

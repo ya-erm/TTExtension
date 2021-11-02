@@ -16,46 +16,78 @@ portfolios.forEach(portfolio => {
     portfolio.fillMissingFields();
 });
 
+
+/** @typedef QueuedRequest
+ * @property {(data: any) => void} resolve
+ * @property {(error: any) => void} reject
+ */
+
+/** @typedef QueuedRequestsGroup
+ * @property {number} priority
+ * @property {Array<QueuedRequest>} promises
+ */
+    
+/**
+ * @typedef TTApi
+ * @property {string} token
+ * @property {Object<string, number>} currencyRates
+ * @property {Portfolio[]} portfolios
+ 
+ * @property {() => Promise<UserAccount[]>} loadAccountsAsync
+ * @property {(account: string) => Promise<PortfolioPosition[]>} loadPortfolioAsync
+ * @property {(account: string) => Promise<CurrencyPosition[]>} loadCurrenciesAsync
+ * @property {(figi: string) => Promise<Instrument>} findInstrumentByFigiAsync
+ * @property {(figi: string) => Promise<Instrument>} loadInstrumentByFigiAsync
+ * @property {(ticker: string) => Promise<Instrument>} loadInstrumentByTickerAsync
+ * @property {(figi: string | undefined, account: string, fromDate?: Date, toDate?: Date) => Promise<Operation[]>} loadOperationsByFigiAsync
+ * @property {(figi: string, account: string) => Promise<Order[]>} loadOrdersByFigiAsync
+ * @property {(orderId: string, account: string) => Promise<any>} cancelOrderAsync
+ * @property {(figi: string, from: Date, to: Date, interval: string) => Promise<Candle[]>} findCandlesAsync
+ * @property {(figi: string, from: Date, to: Date, interval: string) => Promise<Candle[]>} loadCandlesAsync
+ * @property {(figi: string) => Promise<Orderbook>} loadOrderbookAsync
+ * @property {(figi: string) => Promise<Orderbook>} loadOrderbookByTickerAsync
+ * @property {(figi: string, body: {lots: number; operation: string; price: number}, account: string) => Promise<Order>} placeLimitOrderAsync
+ * @property {(currency: string) => Promise<number>} getCurrencyRateAsync
+ * 
+ * @property {(path: string, priority?: number | null) => Promise<any>} httpGetAsync
+ * @property {(path: string, body: object) => Promise<any>} httpPostAsync
+ * 
+ * @property {() => void} savePortfolios
+ * @property {() => void} eraseData
+ * 
+ * @property {{[resource: string]: number}} requests
+ * @property {{[resource: string]: {[path: string]: QueuedRequestsGroup}}} queue
+*/
+
+/** @type TTApi */
 export const TTApi = {
     token: localStorage.getItem("token"),
-
-    /**@type {Object<string, number>} */
     currencyRates: {},
-    /** @type {Array<Portfolio>} */
     portfolios,
 
-    loadAccounts,
-    loadPortfolio,
-    loadCurrencies,
-    findInstrumentByFigi,
-    loadInstrumentByFigi,
-    loadInstrumentByTicker,
-    loadOperationsByFigi,
-    loadOrdersByFigi,
-    cancelOrder,
-    findCandles,
-    loadCandles,
-    loadOrderbook,
-    loadOrderbookByTicker,
-    placeLimitOrder,
-    getCurrencyRate,
+    loadAccountsAsync,
+    loadPortfolioAsync,
+    loadCurrenciesAsync,
+    findInstrumentByFigiAsync,
+    loadInstrumentByFigiAsync,
+    loadInstrumentByTickerAsync,
+    loadOperationsByFigiAsync,
+    loadOrdersByFigiAsync,
+    cancelOrderAsync,
+    findCandlesAsync,
+    loadCandlesAsync,
+    loadOrderbookAsync,
+    loadOrderbookByTickerAsync,
+    placeLimitOrderAsync,
+    getCurrencyRateAsync,
+    
+    httpGetAsync,
+    httpPostAsync,
+
     savePortfolios,
     eraseData,
-    httpGet,
-    httpPost,
 
-    /** @type {{[resource: string]: number}} */
     requests : {},
-
-    /** @typedef QueuedRequest
-     * @property {(data: any) => void} resolve
-     * @property {(error: any) => void} reject
-     */
-    /** @typedef QueuedRequestsGroup
-     * @property {number} priority
-     * @property {Array<QueuedRequest>} promises
-     */
-    /** @type {{[resource: string]: {[path: string]: QueuedRequestsGroup}}} */
     queue: {},
 };
 
@@ -131,7 +163,7 @@ function addToQueue(resource, path, priority) {
  * Обработка очереди
  * @param {string} resource
  */
-async function processQueue (resource) {
+async function processQueueAsync (resource) {
     // Обрабатываем очередь этого же ресурса
     const pathsQueue = TTApi.queue[resource] ?? {};
     // Извлекаем первый запрос из очереди
@@ -145,7 +177,7 @@ async function processQueue (resource) {
         "приоритет:", requestsGroup.priority, 
         "в группе:", requestsGroup.promises.length, 
         "в очереди:", Object.keys(pathsQueue).length, "групп");
-    await _httpGet(path)
+    await _httpGetAsync(path)
         .then(response => {
             requestsGroup.promises.forEach(promise => {
                 promise.resolve(response);
@@ -178,7 +210,7 @@ function processTooManyRequest(resource) {
     setTimeout(() => {
         TTApi.requests[resource] -= overload;
         for(let i = 0; i < overload; i++) {
-            processQueue(resource);
+            processQueueAsync(resource);
         }
     }, 60 * 1000);
 }
@@ -188,7 +220,7 @@ function processTooManyRequest(resource) {
  * @param {string} path - относительный адрес
  * @param {number?} priority - приоритет
  */
-async function httpGet(path, priority = 0) {
+async function httpGetAsync(path, priority = 0) {
     const resource = path.split("?")[0].split("/")[1];
     const workload = (TTApi.requests[resource] ?? 0);
     const limit = requestLimits[resource] ?? requestLimits.default;
@@ -199,10 +231,10 @@ async function httpGet(path, priority = 0) {
     }
     TTApi.requests[resource] = workload + 1;
     try {
-        const result = await _httpGet(path);
+        const result = await _httpGetAsync(path);
         setTimeout(() => {
             TTApi.requests[resource] -= 1;
-            processQueue(resource);
+            processQueueAsync(resource);
         }, 60 * 1000);
         return result;
     }
@@ -220,7 +252,7 @@ async function httpGet(path, priority = 0) {
  * Отправить HTTP GET запрос к API
  * @param {string} path - относительный адрес
  */
-async function _httpGet(path) {
+async function _httpGetAsync(path) {
     const response = await fetch(apiURL + path, { headers: { Authorization: 'Bearer ' + TTApi.token } });
     if (response.status == 200) {
         const data = await response.json();
@@ -247,7 +279,7 @@ async function _httpGet(path) {
  * @param {object} body - тело запроса
  * @returns 
  */
-async function httpPost(path, body) {
+async function httpPostAsync(path, body) {
     const response = await fetch(apiURL + path, {
         method: 'POST',
         headers: {
@@ -273,8 +305,8 @@ async function httpPost(path, body) {
  * Загрузить список доступных счётов
  * @returns {Promise<UserAccount[]>}
  */
-async function loadAccounts() {
-    const payload = await httpGet("/user/accounts");
+async function loadAccountsAsync() {
+    const payload = await httpGetAsync("/user/accounts");
     return payload.accounts;
 }
 
@@ -289,8 +321,8 @@ async function loadAccounts() {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<CurrencyPosition[]>}
  */
-async function loadCurrencies(account) {
-    const payload = await httpGet(`/portfolio/currencies?brokerAccountId=${account}`);
+async function loadCurrenciesAsync(account) {
+    const payload = await httpGetAsync(`/portfolio/currencies?brokerAccountId=${account}`);
     return payload.currencies;
 }
 
@@ -314,8 +346,8 @@ async function loadCurrencies(account) {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<PortfolioPosition[]>}
  */
-async function loadPortfolio(account) {
-    const payload = await httpGet(`/portfolio?brokerAccountId=${account}`);
+async function loadPortfolioAsync(account) {
+    const payload = await httpGetAsync(`/portfolio?brokerAccountId=${account}`);
     return payload.positions;
 }
 
@@ -327,10 +359,10 @@ async function loadPortfolio(account) {
  * @param {Date} toDate - окончание интервала
  * @returns {Promise<Operation[]>}
  */
-async function loadOperationsByFigi(figi, account, fromDate = undefined, toDate = undefined) {
+async function loadOperationsByFigiAsync(figi, account, fromDate = undefined, toDate = undefined) {
     const from = encodeURIComponent(fromDate?.toISOString() ?? '2000-01-01T00:00:00Z');
     const to = encodeURIComponent(toDate?.toISOString() ?? new Date().toISOString());
-    const payload = await httpGet(`/operations?from=${from}&to=${to}`
+    const payload = await httpGetAsync(`/operations?from=${from}&to=${to}`
         + (!!figi ? `&figi=${figi}` : "")
         + `&brokerAccountId=${account}`);
     return payload.operations.map(item => ({ ...item, account }));
@@ -341,8 +373,8 @@ async function loadOperationsByFigi(figi, account, fromDate = undefined, toDate 
  * @param {string} figi - идентификатор
  * @returns {Promise<Instrument>}
  */
-async function loadInstrumentByFigi(figi) {
-    const instrument = await httpGet(`/market/search/by-figi?figi=${figi}`);
+async function loadInstrumentByFigiAsync(figi) {
+    const instrument = await httpGetAsync(`/market/search/by-figi?figi=${figi}`);
     instrumentsRepository.putOne(instrument);
     return instrument;
 }
@@ -352,8 +384,8 @@ async function loadInstrumentByFigi(figi) {
  * @param {string} ticker - идентификатор
  * @returns {Promise<Instrument>}
  */
-async function loadInstrumentByTicker(ticker) {
-    const payload = await httpGet(`/market/search/by-ticker?ticker=${ticker}`);
+async function loadInstrumentByTickerAsync(ticker) {
+    const payload = await httpGetAsync(`/market/search/by-ticker?ticker=${ticker}`);
     if (payload.instruments.length > 0) {
         const instrument = payload.instruments[0];
         instrumentsRepository.putOne(instrument);
@@ -380,8 +412,8 @@ async function loadInstrumentByTicker(ticker) {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<Order[]>}
  */
-async function loadOrdersByFigi(figi, account) {
-    const orders = await httpGet(`/orders?figi=${figi}&brokerAccountId=${account}`);
+async function loadOrdersByFigiAsync(figi, account) {
+    const orders = await httpGetAsync(`/orders?figi=${figi}&brokerAccountId=${account}`);
     return orders.filter(item => item.figi == figi);
 }
 
@@ -391,8 +423,8 @@ async function loadOrdersByFigi(figi, account) {
  * @param {string} account - идентификатор счёта
  * @returns 
  */
-async function cancelOrder(orderId, account) {
-    const payload = await httpPost(`/orders/cancel?orderId=${orderId}&brokerAccountId=${account}`);
+async function cancelOrderAsync(orderId, account) {
+    const payload = await httpPostAsync(`/orders/cancel?orderId=${orderId}&brokerAccountId=${account}`);
     return payload;
 }
 
@@ -416,11 +448,11 @@ async function cancelOrder(orderId, account) {
  * @param {string} interval - интервал 1min, 2min, 3min, 5min, 10min, 15min, 30min, hour, day, week, month
  * @returns {Promise<Candle[]>}
  */
-async function loadCandles(figi, from, to, interval) {
+async function loadCandlesAsync(figi, from, to, interval) {
     const fromDate = encodeURIComponent(from.toISOString());
     const toDate = encodeURIComponent(to.toISOString());
-    const payload = await httpGet(`/market/candles?figi=${figi}&from=${fromDate}&to=${toDate}&interval=${interval}`);
-    await saveCandles(figi, payload.candles);
+    const payload = await httpGetAsync(`/market/candles?figi=${figi}&from=${fromDate}&to=${toDate}&interval=${interval}`);
+    await saveCandlesAsync(figi, payload.candles);
     return payload.candles;
 }
 
@@ -450,8 +482,8 @@ async function loadCandles(figi, from, to, interval) {
  * @param {string} figi - идентификатор FIGI
  * @returns {Promise<Orderbook>}
  */
-async function loadOrderbook(figi) {
-    const orderbook = await httpGet(`/market/orderbook?figi=${figi}&depth=${1}`);
+async function loadOrderbookAsync(figi) {
+    const orderbook = await httpGetAsync(`/market/orderbook?figi=${figi}&depth=${1}`);
     return orderbook;
 }
 
@@ -460,13 +492,13 @@ async function loadOrderbook(figi) {
  * @param {string} ticker - тикер
  * @returns {Promise<Orderbook>}
  */
-async function loadOrderbookByTicker(ticker) {
-    const instrument = await loadInstrumentByTicker(ticker);
+async function loadOrderbookByTickerAsync(ticker) {
+    const instrument = await loadInstrumentByTickerAsync(ticker);
     if (!instrument) {
         throw new Error("Instrument not found");
     }
 
-    return await loadOrderbook(instrument.figi);
+    return await loadOrderbookAsync(instrument.figi);
 }
 
 /**
@@ -474,10 +506,10 @@ async function loadOrderbookByTicker(ticker) {
  * @param {string} figi - идентификатор FIGI
  * @returns {Promise<Instrument>}
  */
-async function findInstrumentByFigi(figi) {
+async function findInstrumentByFigiAsync(figi) {
     let instrument = await instrumentsRepository.getOneByFigi(figi);
     if (!instrument) {
-        instrument = await loadInstrumentByFigi(figi);
+        instrument = await loadInstrumentByFigiAsync(figi);
         instrumentsRepository.putOne(instrument);
     }
     return instrument;
@@ -491,7 +523,7 @@ async function findInstrumentByFigi(figi) {
  * @param {string} interval 
  * @returns {Promise<Candle[]>}
  */
-async function findCandles(figi, from, to, interval) {
+async function findCandlesAsync(figi, from, to, interval) {
     const instrument = await instrumentsRepository.getOneByFigi(figi);
     if (instrument?.candles == undefined || instrument.candles[interval] == undefined) {
         return [];
@@ -504,9 +536,9 @@ async function findCandles(figi, from, to, interval) {
  * @param {string} figi - идентификатор
  * @param {Array<Candle>} candles - свечи
  */
-async function saveCandles(figi, candles) {
+async function saveCandlesAsync(figi, candles) {
     if (candles.length == 0) { return; }
-    const instrument = await findInstrumentByFigi(figi);
+    const instrument = await findInstrumentByFigiAsync(figi);
     const interval = candles[0].interval;
     if (instrument.candles == undefined) {
         instrument.candles = {};
@@ -523,15 +555,15 @@ async function saveCandles(figi, candles) {
  * @param {string} currency Валюта (USD, EUR)
  * @returns {Promise<number>}
  */
-async function getCurrencyRate(currency) {
+async function getCurrencyRateAsync(currency) {
     let currencyRate = TTApi.currencyRates[currency];
     if (!currencyRate) {
         switch (currency) {
             case "USD":
-                currencyRate = (await loadOrderbook("BBG0013HGFT4")).lastPrice; // Доллар США
+                currencyRate = (await loadOrderbookAsync("BBG0013HGFT4")).lastPrice; // Доллар США
                 break;
             case "EUR":
-                currencyRate = (await loadOrderbook("BBG0013HJJ31")).lastPrice; // Евро
+                currencyRate = (await loadOrderbookAsync("BBG0013HJJ31")).lastPrice; // Евро
                 break;
             case "RUB":
                 currencyRate = 1;
@@ -562,9 +594,9 @@ async function getCurrencyRate(currency) {
  * @param {string} account - идентификатор счёта
  * @returns {Promise<Order>}
  */
-async function placeLimitOrder(figi, body, account) {
+async function placeLimitOrderAsync(figi, body, account) {
     /** @type {PlaceLimitOrderResponse} */
-    const payload = await httpPost(`/orders/limit-order?figi=${figi}&brokerAccountId=${account}`, body);
+    const payload = await httpPostAsync(`/orders/limit-order?figi=${figi}&brokerAccountId=${account}`, body);
     
     if (payload.rejectReason) {
         throw new Error(payload.message);
