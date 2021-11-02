@@ -131,7 +131,7 @@ function drawPositions(portfolio) {
                 });
         }
     });
-    addPositionSummaryRowAsync(portfolio);
+    updatePositionSummaryRowAsync(portfolio);
     sortPositionsTable(portfolio);
 }
 
@@ -186,6 +186,14 @@ function createPortfolioTab(portfolio) {
     priceChangeUnitSwitch.textContent = (portfolio.settings.priceChangeUnit == "Percents") ? "%" : "$";
 
     addPortfolioSortButtonHandlers(portfolio);
+
+    // Итоговая строка
+    /** @type {HTMLElement} */ //@ts-ignore
+    const positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
+    positionRow.id = `portfolio-${portfolio.id}_position-summary`;
+    setClassIf(positionRow, "cursor-pointer", false);
+    const tfoot = document.querySelector(`#portfolio-${portfolio.id}-table tfoot.positions-summary-row`);
+    tfoot.appendChild(positionRow);
 }
 
 // Обработчик события обновления позиции
@@ -194,7 +202,7 @@ window.addEventListener("PositionUpdated", (event) => {
     const { position } = event.detail;
     const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
     addOrUpdatePosition(portfolio, position);
-    addPositionSummaryRowAsync(portfolio);
+    updatePositionSummaryRowAsync(portfolio);
 });
 
 // Обработчик события удаления позиции
@@ -203,7 +211,7 @@ window.addEventListener("PositionRemoved", function (event) {
     const { position } = event.detail;
     const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
     document.querySelector(`#portfolio-${portfolio.id}_position-${position.figi}`)?.remove();
-    addPositionSummaryRowAsync(portfolio);
+    updatePositionSummaryRowAsync(portfolio);
 });
 
 /**
@@ -432,14 +440,8 @@ async function getTodayFixedPnLAsync(portfolio, position) {
  * Добавить итоговую строку по позициям
  * @param {Portfolio} portfolio
  */
-async function addPositionSummaryRowAsync(portfolio) {
-    let positionRow = document.getElementById(`portfolio-${portfolio.id}_position-summary`);
-    if (positionRow) { positionRow.remove(); }
-    /** @type {HTMLElement} */ //@ts-ignore
-    positionRow = document.querySelector('#portfolio-row-template').content.firstElementChild.cloneNode(true);
-    positionRow.id = `portfolio-${portfolio.id}_position-summary`;
-
-    setClassIf(positionRow, "cursor-pointer", false);
+async function updatePositionSummaryRowAsync(portfolio) {
+    const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-summary`);
 
     const excludeCurrenciesFromTotal = JSON.parse(localStorage["excludeCurrenciesFromTotal"] || "false");
 
@@ -534,10 +536,8 @@ async function addPositionSummaryRowAsync(portfolio) {
     averageCell.colSpan = 2;
 
     const priceCell = positionRow.querySelector("td.portfolio-last");
-    priceCell.remove();
+    priceCell?.remove();
 
-    const tfoot = document.querySelector(`#portfolio-${portfolio.id}-table tfoot.positions-summary-row`);
-    tfoot.appendChild(positionRow);
     drawQueueStatus();
 
     const totalCostSpanPrev = document.querySelector(".portfolio-total-cost");
@@ -573,7 +573,7 @@ function changeSelectedCurrency(portfolio, selectedCurrency) {
         selectedCurrency = "RUB";
     }
     localStorage.setItem("selectedCurrency", selectedCurrency);
-    addPositionSummaryRowAsync(portfolio);
+    updatePositionSummaryRowAsync(portfolio);
 };
 
 /**
@@ -1151,7 +1151,7 @@ excludeCurrenciesFromTotalCheckbox.checked = (localStorage["excludeCurrenciesFro
 excludeCurrenciesFromTotalCheckbox.addEventListener("change", (e) => {
     // @ts-ignore
     localStorage.setItem("excludeCurrenciesFromTotal", e.target.checked);
-    addPositionSummaryRowAsync(TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio));
+    updatePositionSummaryRowAsync(TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio));
 });
 
 // #endregion
@@ -1311,7 +1311,7 @@ filterPositionsForm.addEventListener("submit", (e) => {
     applyFilterPositionsButtonStyle(portfolio);
 
     drawPositions(portfolio);
-    addPositionSummaryRowAsync(portfolio);
+    updatePositionSummaryRowAsync(portfolio);
 
     //@ts-ignore
     $('#filter-positions-modal').modal('hide');
