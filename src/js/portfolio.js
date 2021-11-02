@@ -21,9 +21,9 @@ import { TTApi } from "./TTApi.js";
 
 /**
  * @typedef PortfolioSettings
- * @property {string} priceChangeUnit - переключатель отображения изменения цены за день (Percents, Absolute)
- * @property {string} expectedUnit - переключатель отображения ожидаемой прибыли (Percents, Absolute)
- * @property {string} allDayPeriod - переключатель отображения прибыли (All, Day)
+ * @property {'Percents'|'Absolute'} priceChangeUnit - переключатель отображения изменения цены за день (Percents, Absolute)
+ * @property {'Percents'|'Absolute'} expectedUnit - переключатель отображения ожидаемой прибыли (Percents, Absolute)
+ * @property {'All'|'Day'|'Week'|'Month'|'Year'} allDayPeriod - переключатель отображения прибыли (All, Day, Week, Month, Year)
  * @property {PortfolioFilter?} filter - параметры фильтрации
  * @property {PortfolioSorting?} sorting - параметры сортировки
  */

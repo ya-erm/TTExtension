@@ -405,31 +405,41 @@ async function fillPositionRowAsync(portfolio, positionRow, position) {
     }
 
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
-    if (portfolio.settings.allDayPeriod == "All") {
-        cellFixedPnL.textContent = printMoney(position.fixedPnL, position.currency, true);
-        cellFixedPnL.className = getMoneyColorClass(position.fixedPnL);
-    } else {
-        const fixedPnLToday = await getTodayFixedPnLAsync(portfolio, position);
-        cellFixedPnL.textContent = printMoney(fixedPnLToday, position.currency, true);
-        cellFixedPnL.className = getMoneyColorClass(fixedPnLToday);
-    }
+    let fixedPnL = await getFixedPnLForPeriodAsync(portfolio, position);
+    cellFixedPnL.textContent = printMoney(fixedPnL, position.currency, true);
+    cellFixedPnL.className = getMoneyColorClass(fixedPnL);
 }
 
 /**
- * Рассчитать зафиксированную прибыль за торговый день
+ * Рассчитать зафиксированную прибыль за выбранный период
  * @param {Portfolio} portfolio
  * @param {Position} position
  */
-async function getTodayFixedPnLAsync(portfolio, position) {
+async function getFixedPnLForPeriodAsync(portfolio, position) {
+    if (portfolio.settings.allDayPeriod == 'All') {
+        return position.fixedPnL;
+    }
+    const days = function(){
+        switch(portfolio.settings.allDayPeriod) {
+            case "Day":
+                return 1;
+            case "Week":
+                return 7;
+            case "Month":
+                return 30;
+            case "Year":
+                return 365;
+        }
+    }() - 1;
     const now = new Date();
     const fills = await portfolio.fillsRepository.getAllByFigi(position.figi);
     const fillsToday = fills.filter(fill => {
         if (fill.fixedPnL == undefined) { return false; }
         const fillDate = new Date(fill.date);
-        if (now.getUTCHours() < 7) { // 7 UTC = 10 MSK
-            return fillDate > new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 7));
+        if (now.getUTCHours() < 4) { // 4 UTC = 7 MSK
+            return fillDate > new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days - 1, 4));
         } else {
-            return fillDate > new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 7));
+            return fillDate > new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days, 4));
         }
     });
     const fixedPnLToday = fillsToday.reduce((sum, fill) => sum + fill.fixedPnL, 0);
@@ -473,7 +483,7 @@ async function updatePositionSummaryRowAsync(portfolio) {
         if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
             // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
             result.expected[position.currency] += (expected || 0);
-            const fixedPnL = (portfolio.settings.allDayPeriod == "All") ? position.fixedPnL : await getTodayFixedPnLAsync(portfolio, position);
+            const fixedPnL = await getFixedPnLForPeriodAsync(portfolio, position);
             result.fixedPnL[position.currency] += (fixedPnL || 0);
         }
         return Promise.resolve(result);
@@ -495,7 +505,7 @@ async function updatePositionSummaryRowAsync(portfolio) {
     }, 0);
     totalExpectedTitle = totalExpectedTitle.trimEnd();
 
-    let totalFixedPnLTitle = (portfolio.settings.allDayPeriod == "All") ? "Total fixed P&L \n" : "Fixed P&L today \n";
+    let totalFixedPnLTitle = (portfolio.settings.allDayPeriod == "All") ? "Total fixed P&L \n" : `Fixed P&L for a ${portfolio.settings.allDayPeriod} \n`;
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
         totalFixedPnLTitle += `${key}: ${printMoney(total.fixedPnL[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
@@ -1111,7 +1121,21 @@ eraseButton.addEventListener("click", (e) => {
  * @param {Portfolio} portfolio
  */
 function changePortfolioAllDay(portfolio) {
-    portfolio.settings.allDayPeriod = (portfolio.settings.allDayPeriod == "All") ? "Day" : "All";
+    function nextPortfolioPeriod() {
+        switch(portfolio.settings.allDayPeriod) {
+            case "Day":
+                return "Week";
+            case "Week":
+                return "Month";
+            case "Month":
+                return "Year";
+            case "Year":
+                return "All";
+            case "All":
+                return "Day";
+        }
+    }
+    portfolio.settings.allDayPeriod = nextPortfolioPeriod();
     const portfolioAllDaySwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-all-day-switch`);
     portfolioAllDaySwitch.textContent = portfolio.settings.allDayPeriod;
     drawPositions(portfolio);
