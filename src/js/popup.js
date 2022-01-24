@@ -1,7 +1,7 @@
 // @ts-check
 import { calcPriceChange, calcPriceChangePercents, getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { showConfirm } from "./confirm.js";
-import { Fill } from "./fill.js";
+import { Fill, printTrade } from "./fill.js";
 import { Portfolio } from "./portfolio.js";
 import { Position } from "./position.js";
 import getFillsRepository from "./storage/fillsRepository.js";
@@ -367,8 +367,9 @@ async function fillPositionRowAsync(portfolio, positionRow, position) {
     if (inaccurateValue) {
         instrumentsRepository.getOneByFigi(position.figi)
             .then(instrument => {
-                const precision = instrument?.minPriceIncrement.toString().length ?? 4 - 2
-                cellAverage.title = `Calculated by fills: ${printMoney(position.calculatedAverage, null, false, precision)}\n` +
+                const precision = (instrument?.minPriceIncrement.toString().length ?? 4) - 2
+                cellAverage.title = 
+                    `Calculated by fills: ${printMoney(position.calculatedAverage, null, false, precision)}\n` +
                     `Actual value: ${printMoney(position.average, null, false, precision)}`;
         });
     } else {
@@ -743,7 +744,10 @@ function drawOperations(portfolio, position, fills) {
         /** @type {HTMLElement} */
         const cellTime = fillRow.querySelector("td.fills-time");
         cellTime.textContent = printDate(Fill.getLastTradeDate(item)) ?? printDate(item.date);
-        cellTime.title = "Created: " + printDate(item.date) + ",\n" + "Executed: " + printDate(Fill.getLastTradeDate(item));
+        cellTime.title =
+            "Created: " + printDate(item.date) + "\n" + 
+            "Executed: " + printDate(Fill.getLastTradeDate(item)) + "\n" + 
+            "Trades:" + "\n" + item.trades.map(x => " • " + printTrade(x)).join('\n');
         setClassIf(cellTime, "inaccurate-value-text", !!!Fill.getLastTradeDate(item))
 
         const cellType = fillRow.querySelector("td.fills-type span");

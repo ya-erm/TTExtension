@@ -1,4 +1,7 @@
 // @ts-check
+
+import { printDate } from "./utils.js";
+
 /** 
  * @class Fill
  */
@@ -70,4 +73,12 @@ export class Fill {
             return new Date(fill.trades[fill.trades.length - 1].date)
         }
     }
+}
+
+/**
+ * 
+ * @param {{ tradeId: string, date: string, quantity: number, price: number }} trade 
+ */
+export function printTrade(trade) {
+    return `${trade.quantity} x ${trade.price.toFixed(2)} ${printDate(trade.date)}`
 }

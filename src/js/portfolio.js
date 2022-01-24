@@ -571,9 +571,6 @@ export class Portfolio {
                 }
             });
 
-        if (created == 0 && updated == 0) {
-            return fills;
-        }
 
         let currentQuantity = 0;
         let totalFixedPnL = 0;
@@ -584,10 +581,14 @@ export class Portfolio {
             //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by order placed
             .sort((a, b) => { // sort by last trade executed or order creation if trades is unknown
                 const aDate = Fill.getLastTradeDate(a) ?? new Date(a.date);
-                const bDate = Fill.getLastTradeDate(b) ?? new Date(a.date);
+                const bDate = Fill.getLastTradeDate(b) ?? new Date(b.date);
                 return aDate.getTime() -  bDate.getTime()
             }) 
         
+        if (created == 0 && updated == 0) {
+            return fills;
+        }
+
         fills
             .forEach(fill => {
                 const result = processFill({
