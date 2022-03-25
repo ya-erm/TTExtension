@@ -63,22 +63,36 @@ export class Fill {
         /** @type {boolean?} true, если запись изменена вручную */
         this.manual = undefined;
     }
-
-    /**
-     * @param {Fill} fill
-     * @returns {Date?}
-     */
-    static getLastTradeDate(fill) {
-        if (fill.trades?.length > 0) {
-            return new Date(fill.trades[fill.trades.length - 1].date)
-        }
-    }
 }
 
 /**
- * 
+ * Дата последней исполненной сделки внутри заявки
+ * @param {Fill} fill
+ * @returns {Date?}
+ */
+export function getFillLastTradeDate(fill) {
+    if (fill.trades?.length > 0) {
+        return new Date(fill.trades[fill.trades.length - 1].date)
+    }
+}
+/**
+ * Текстовое представление сделки
  * @param {{ tradeId: string, date: string, quantity: number, price: number }} trade 
  */
 export function printTrade(trade) {
     return `${trade.quantity} x ${trade.price.toFixed(2)} ${printDate(trade.date)}`
+}
+
+/**
+ * Сортировка операций по дате последней сделки
+ * @param {Fill[]} fills 
+ */
+export function sortFills(fills) {
+    return fills
+        //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by order placed
+        .sort((a, b) => { // sort by last trade executed or order creation if trades is unknown
+            const aDate = getFillLastTradeDate(a) ?? new Date(a.date);
+            const bDate = getFillLastTradeDate(b) ?? new Date(b.date);
+            return aDate.getTime() -  bDate.getTime()
+        })
 }

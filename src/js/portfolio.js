@@ -1,6 +1,6 @@
 // @ts-check
 import { calcPriceChange, calcPriceChangePercents, processFill } from "./calculate.js";
-import { Fill } from "./fill.js";
+import { Fill, sortFills } from "./fill.js";
 import { Position, updatePosition } from "./position.js";
 import getFillsRepository, { FillsRepository } from "./storage/fillsRepository.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
@@ -577,13 +577,7 @@ export class Portfolio {
         let averagePrice = 0;
         let averagePriceCorrected = 0;
 
-        fills = fills
-            //.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // sort by order placed
-            .sort((a, b) => { // sort by last trade executed or order creation if trades is unknown
-                const aDate = Fill.getLastTradeDate(a) ?? new Date(a.date);
-                const bDate = Fill.getLastTradeDate(b) ?? new Date(b.date);
-                return aDate.getTime() -  bDate.getTime()
-            }) 
+        fills = sortFills(fills)
         
         if (created == 0 && updated == 0) {
             return fills;

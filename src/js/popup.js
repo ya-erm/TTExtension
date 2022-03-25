@@ -1,7 +1,7 @@
 // @ts-check
 import { calcPriceChange, calcPriceChangePercents, getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { showConfirm } from "./confirm.js";
-import { Fill, printTrade } from "./fill.js";
+import { Fill, getFillLastTradeDate, printTrade, sortFills } from "./fill.js";
 import { Portfolio } from "./portfolio.js";
 import { Position } from "./position.js";
 import getFillsRepository from "./storage/fillsRepository.js";
@@ -605,7 +605,10 @@ function onPositionClick(portfolio, position) {
 
         // Отображаем сделки из памяти
         portfolio.fillsRepository.getAllByFigi(position.figi)
-            .then((fills) => drawOperations(portfolio, position, fills));
+            .then((items) => {
+                const fills = sortFills(items)
+                drawOperations(portfolio, position, fills)
+            });
 
         // Загружаем новые сделки и обновляем таблицу
         portfolio.loadFillsByTicker(position.ticker)
@@ -743,12 +746,12 @@ function drawOperations(portfolio, position, fills) {
 
         /** @type {HTMLElement} */
         const cellTime = fillRow.querySelector("td.fills-time");
-        cellTime.textContent = printDate(Fill.getLastTradeDate(item)) ?? printDate(item.date);
+        cellTime.textContent = printDate(getFillLastTradeDate(item)) ?? printDate(item.date);
         cellTime.title =
             "Created: " + printDate(item.date) + "\n" + 
-            "Executed: " + printDate(Fill.getLastTradeDate(item)) + "\n" + 
+            "Executed: " + printDate(getFillLastTradeDate(item)) + "\n" + 
             "Trades:" + "\n" + item.trades.map(x => " • " + printTrade(x)).join('\n');
-        setClassIf(cellTime, "inaccurate-value-text", !!!Fill.getLastTradeDate(item))
+        setClassIf(cellTime, "inaccurate-value-text", !!!getFillLastTradeDate(item))
 
         const cellType = fillRow.querySelector("td.fills-type span");
         cellType.textContent = item.operationType == "BuyCard" ? "Buy" : item.operationType;
