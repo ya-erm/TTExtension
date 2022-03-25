@@ -3,9 +3,11 @@ import { Portfolio } from "./portfolio.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
 import { setClassIf } from "./utils.js";
 
+// https://tinkoff.github.io/invest-openapi/
+// https://tinkoff.github.io/invest-openapi/swagger-ui/
+
 const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
-// https://tinkoff.github.io/invest-openapi/swagger-ui/
 
 export const USD_FIGI = "BBG0013HGFT4"
 export const EUR_FIGI = "BBG0013HJJ31"
