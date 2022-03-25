@@ -10,18 +10,40 @@ import { TTApi } from "./TTApi.js";
 export function getCurrencyRate(from, to) {
     if (from == to) { return 1.0 }
 
-    const usdToRub = TTApi.currencyRates["USD"]; // Доллар США
-    if (from == "USD" && to == "RUB") {
-        return usdToRub;
-    } else if (from == "RUB" && to == "USD") {
-        return 1.0 / usdToRub;
+    if ([from, to].includes("USD")) {
+        const usdToRub = TTApi.currencyRates["USD"]; // Доллар США
+        if (!usdToRub) {
+            throw new Error(`Failed to convert from ${from} to ${to}`)
+        }
+        if (from == "USD" && to == "RUB") {
+            return usdToRub;
+        } else if (from == "RUB" && to == "USD") {
+            return 1.0 / usdToRub;
+        }
     }
 
-    const eurToRub = TTApi.currencyRates["EUR"]; // Евро
-    if (from == "EUR" && to == "RUB") {
-        return eurToRub;
-    } else if (from == "RUB" && to == "EUR") {
-        return 1.0 / eurToRub;
+    if ([from, to].includes("EUR")) {
+        const eurToRub = TTApi.currencyRates["EUR"]; // Евро
+        if (!eurToRub) {
+            throw new Error(`Failed to convert from ${from} to ${to}`)
+        }
+        if (from == "EUR" && to == "RUB") {
+            return eurToRub;
+        } else if (from == "RUB" && to == "EUR") {
+            return 1.0 / eurToRub;
+        }
+    }
+
+    if ([from, to].includes("EUR") && [from, to].includes("USD")) {
+        const usdToRub = TTApi.currencyRates["USD"];
+        const eurToRub = TTApi.currencyRates["EUR"];
+        if (!usdToRub || !eurToRub) {
+            throw new Error(`Failed to convert from ${from} to ${to}`)
+        }
+        if (from == "EUR" && to == "USD") {
+            return eurToRub / usdToRub
+        }        
+        return usdToRub / eurToRub
     }
 
     throw new Error(`Failed to convert from ${from} to ${to}`)

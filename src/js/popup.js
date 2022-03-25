@@ -49,7 +49,7 @@ async function mainAsync() {
         // @ts-ignore
         document.getElementById("token-input").value = TTApi.token;
 
-        await TTApi.getCurrencyRateAsync("USD");
+        await Promise.all([TTApi.getCurrencyRateAsync("USD"), TTApi.getCurrencyRateAsync("EUR")])
 
         // Создаём вкладки для каждого портфеля
         TTApi.portfolios.forEach(portfolio => {
@@ -497,14 +497,12 @@ async function updatePositionSummaryRowAsync(portfolio) {
         totalCostTitle += `${key}: ${printMoney(total.cost[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.cost[key];
     }, 0);
-    totalCostTitle = totalCostTitle.trimEnd();
 
     let totalExpectedTitle = "Total expected \n";
     const totalExpected = Object.keys(total.expected).reduce((result, key) => {
         totalExpectedTitle += `${key}: ${printMoney(total.expected[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
-    totalExpectedTitle = totalExpectedTitle.trimEnd();
 
     let totalFixedPnLTitle = (portfolio.settings.allDayPeriod == "All") ? "Total fixed P&L \n" : `Fixed P&L for a ${portfolio.settings.allDayPeriod} \n`;
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
@@ -519,7 +517,7 @@ async function updatePositionSummaryRowAsync(portfolio) {
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
     cellExpected.textContent = printMoney(totalExpected, selectedCurrency, true);
     cellExpected.className = getMoneyColorClass(totalExpected);
-    cellExpected.title = totalExpectedTitle;
+    cellExpected.title = totalExpectedTitle.trimEnd();
     cellExpected.addEventListener('click', _ => changeSelectedCurrency(portfolio, selectedCurrency));
     setClassIf(cellExpected, "cursor-pointer", true);
 
@@ -527,7 +525,7 @@ async function updatePositionSummaryRowAsync(portfolio) {
     const cellFixedPnL = positionRow.querySelector("td.portfolio-fixed-pnl span");
     cellFixedPnL.textContent = printMoney(totalFixedPnL, selectedCurrency, true);
     cellFixedPnL.className = getMoneyColorClass(totalFixedPnL);
-    cellFixedPnL.title = totalFixedPnLTitle;
+    cellFixedPnL.title = totalFixedPnLTitle.trimEnd();
     cellFixedPnL.addEventListener('click', _ => changeSelectedCurrency(portfolio, selectedCurrency));
     setClassIf(cellFixedPnL, "cursor-pointer", true);
 
@@ -557,7 +555,7 @@ async function updatePositionSummaryRowAsync(portfolio) {
     totalCostSpanPrev.parentNode.replaceChild(totalCostSpan, totalCostSpanPrev);
     const oldTotalCost = parseFloat(totalCostSpan.innerHTML.replace(/ /g, ''));
     totalCostSpan.innerHTML = printMoney(totalCost, selectedCurrency);
-    totalCostSpan.title = totalCostTitle;
+    totalCostSpan.title = totalCostTitle.trimEnd();
     totalCostSpan.addEventListener('click', _ => changeSelectedCurrency(portfolio, selectedCurrency));
 
     if (oldTotalCost && Math.abs(totalCost - oldTotalCost) > 0.01) {
@@ -920,24 +918,34 @@ async function drawSystemOperationsAsync(portfolio, operations) {
             const group = total[key];
             let totalValue = 0;
             let totalValueTitle = `Total ${key} \n`;
+            let inaccurateValueErrors = []
 
             // Конвертируем из других валют в выбранную
             Object.keys(group).forEach(currency => {
-                totalValue += group[currency] * getCurrencyRate(currency, selectedCurrency)
+                try {
+                    const currencyRate = getCurrencyRate(currency, selectedCurrency);
+                    totalValue += group[currency] * currencyRate;
+                } catch {
+                    console.error('Failed to get currency rate', currency, selectedCurrency);
+                    inaccurateValueErrors.push(`Не удалось определить курс ${currency} к ${selectedCurrency}`)
+                }
                 totalValueTitle += `${currency}: ${printMoney(group[currency], currency)}\n`;
             });
 
             /** @type {HTMLElement} */ //@ts-ignore
             const fillRow = document.querySelector("#money-row-template").content.firstElementChild.cloneNode(true);
 
+            /** @type {HTMLElement} */
             const cellPayment = fillRow.querySelector("td.money-payment");
             cellPayment.textContent = printMoney(totalValue, selectedCurrency);
+            setClassIf(cellPayment, "inaccurate-value-text", inaccurateValueErrors.length > 0)
+            cellPayment.title = inaccurateValueErrors.join("\n")
 
             /** @type {HTMLElement} */
             const cellType = fillRow.querySelector("td.money-type span");
             cellType.textContent = key;
             applyStyleByType(cellType, key);
-            cellType.title = totalValueTitle;
+            cellType.title = totalValueTitle.trimEnd();
             cellType.classList.add("cursor-help");
 
             const cellAsset = fillRow.querySelector("td.portfolio-asset");

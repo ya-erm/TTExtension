@@ -5,7 +5,7 @@ import { setClassIf } from "./utils.js";
 
 const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
-// https://tinkoffcreditsystems.github.io/invest-openapi/swagger-ui/
+// https://tinkoff.github.io/invest-openapi/swagger-ui/
 
 /** @typedef {import('./storage/operationsRepository.js').Operation} Operation */
 /** @typedef {import('./storage/instrumentsRepository.js').Instrument} Instrument */
