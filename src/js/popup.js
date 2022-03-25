@@ -477,9 +477,9 @@ async function updatePositionSummaryRowAsync(portfolio) {
         const count = inaccurateValue ? position.count : position.calculatedCount;
         const average = inaccurateValue ? position.average : position.calculatedAverage;
         const expected = inaccurateValue ? position.expected : position.calculatedExpected;
-        result.cost[position.currency] |= 0;
-        result.expected[position.currency] |= 0;
-        result.fixedPnL[position.currency] |= 0;
+        result.cost[position.currency] ||= 0;
+        result.expected[position.currency] ||= 0;
+        result.fixedPnL[position.currency] ||= 0;
         result.cost[position.currency] += (count || 0) * (average || 0) + (expected || 0);
         if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
             // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
