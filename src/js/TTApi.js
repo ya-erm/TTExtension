@@ -7,6 +7,11 @@ const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
 // https://tinkoff.github.io/invest-openapi/swagger-ui/
 
+export const USD_FIGI = "BBG0013HGFT4"
+export const EUR_FIGI = "BBG0013HJJ31"
+export const TCS_FIGI = "BBG005DXJS36"
+export const TCSG_FIGI = "BBG00QPYJ5H0"
+
 /** @typedef {import('./storage/operationsRepository.js').Operation} Operation */
 /** @typedef {import('./storage/instrumentsRepository.js').Instrument} Instrument */
 
@@ -360,12 +365,34 @@ async function loadPortfolioAsync(account) {
  * @returns {Promise<Operation[]>}
  */
 async function loadOperationsByFigiAsync(figi, account, fromDate = undefined, toDate = undefined) {
+    const originalFigi = figi
+    // Для тикера TCSG операции надо запрашивать по figi от TCS
+    if (originalFigi == TCSG_FIGI) {
+        figi = TCS_FIGI
+    }
+
     const from = encodeURIComponent(fromDate?.toISOString() ?? '2000-01-01T00:00:00Z');
     const to = encodeURIComponent(toDate?.toISOString() ?? new Date().toISOString());
     const payload = await httpGetAsync(`/operations?from=${from}&to=${to}`
         + (!!figi ? `&figi=${figi}` : "")
         + `&brokerAccountId=${account}`);
-    return payload.operations.map(item => ({ ...item, account }));
+
+    /** @type {Operation[]} */
+    const operations = payload.operations.map((/** @type {Operation} */ item) => {
+        if (item.figi == TCS_FIGI && item.currency == "RUB") {
+            item.figi = TCSG_FIGI
+        }
+        return { ...item, account }
+    });
+
+    // Для тикера TCSG операции приходят вместе с операциями по figi от TCS, поэтому различаем их по валюте
+    if (originalFigi == TCSG_FIGI) {
+        return operations.filter(item => item.currency == "RUB")
+    }
+    if (originalFigi == TCS_FIGI) {
+        return operations.filter(item => item.currency == "USD")
+    }
+    return operations
 }
 
 /**
@@ -560,10 +587,10 @@ async function getCurrencyRateAsync(currency) {
     if (!currencyRate) {
         switch (currency) {
             case "USD":
-                currencyRate = (await loadOrderbookAsync("BBG0013HGFT4")).lastPrice; // Доллар США
+                currencyRate = (await loadOrderbookAsync(USD_FIGI)).lastPrice;
                 break;
             case "EUR":
-                currencyRate = (await loadOrderbookAsync("BBG0013HJJ31")).lastPrice; // Евро
+                currencyRate = (await loadOrderbookAsync(EUR_FIGI)).lastPrice;
                 break;
             case "RUB":
                 currencyRate = 1;

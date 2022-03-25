@@ -5,7 +5,7 @@ import { Position, updatePosition } from "./position.js";
 import getFillsRepository, { FillsRepository } from "./storage/fillsRepository.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository, { OperationsRepository } from "./storage/operationsRepository.js";
-import { TTApi } from "./TTApi.js";
+import { EUR_FIGI, TTApi, USD_FIGI } from "./TTApi.js";
 
 /**
  * @typedef PortfolioFilter
@@ -315,13 +315,13 @@ export class Portfolio {
             let name, figi, ticker, lastPrice, average;
             switch (item.currency) {
                 case "USD":
-                    name = "Евро";
-                    figi = "BBG0013HGFT4";
+                    name = "Доллар США";
+                    figi = USD_FIGI;
                     ticker = "USD000UTSTOM";
                     break;
                 case "EUR":
-                    name = "Доллар США";
-                    figi = "BBG0013HJJ31";
+                    name = "Евро";
+                    figi = EUR_FIGI;
                     ticker = "EUR_RUB__TOM";
                     break;
                 case "RUB":
