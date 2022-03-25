@@ -1083,14 +1083,6 @@ async function drawTradingPanelAsync(portfolio, position) {
 
 // #region Settings
 
-/** @type {HTMLInputElement} */
-const webTerminalCheckbox = document.querySelector("#webTerminalCheckbox");
-webTerminalCheckbox.checked = (localStorage["overrideAveragePriceOnWebTerminal"] === "true");
-webTerminalCheckbox.addEventListener("change", (e) => {
-    //@ts-ignore
-    localStorage["overrideAveragePriceOnWebTerminal"] = e.target.checked;
-});
-
 let updateIntervalTimeout = localStorage["positionsUpdateIntervalInput"] || 60 * 1000;
 let positionsUpdateTimerId;
 

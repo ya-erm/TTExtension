@@ -372,8 +372,9 @@ export class Portfolio {
      */
     async calculatePositions() {
         const now = new Date();
-        const lastYear = new Date(now.setFullYear(now.getFullYear() - 1));
-        const operations =  await TTApi.loadOperationsByFigiAsync(undefined, this.account, lastYear);
+        // TODO: Ограничить значение 'from' если будут проблемы из-за слишком большого объёма данных
+        // const lastYear = new Date(now.setFullYear(now.getFullYear() - 1));
+        const operations =  await TTApi.loadOperationsByFigiAsync(undefined, this.account, undefined);
         this.positions.forEach(async position => {
             const positionOperations = operations.filter(x => x.figi == position.figi);
             if (positionOperations.length > 0) {
@@ -609,7 +610,7 @@ export class Portfolio {
 
         position.calculatedCount = currentQuantity;
         if (position.count != currentQuantity) {
-            console.warn("Calculated by fills position quantity", currentQuantity, "is not equal with actual position quantity", position.count);
+            console.warn(`${position.ticker}: Calculated by fills position quantity ${currentQuantity} is not equal with actual position quantity ${position.count}`);
         }
 
         // Обновляем позицию

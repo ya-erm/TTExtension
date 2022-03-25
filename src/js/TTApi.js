@@ -256,10 +256,10 @@ async function _httpGetAsync(path) {
     const response = await fetch(apiURL + path, { headers: { Authorization: 'Bearer ' + TTApi.token } });
     if (response.status == 200) {
         const data = await response.json();
-        console.log(`GET ${path}\n`, data);
+        console.debug(`GET ${path}\n`, data);
         return (data.payload);
     } else {
-        console.log(`GET ${path}\n`, response.statusText);
+        console.error(`GET ${path}\n`, response.statusText);
         const error = new Error(response.statusText);
         // @ts-ignore
         error.code = response.status;
