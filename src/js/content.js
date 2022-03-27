@@ -111,7 +111,7 @@ function calculateProfit(asset, currency) {
 }
 
 // Конвертация строкового представления валюты в символ
-function mapCurrency(currency) {
+function printCurrency(currency) {
     if (!currency) { return ""; }
     switch (currency) {
         case "RUB": return "₽";
@@ -125,5 +125,5 @@ function mapCurrency(currency) {
 function printMoney(value, currency, withSign = false) {
     if (value == null || value == undefined || isNaN(value)) { return ""; }
     const sign = (withSign && value > 0 ? '+' : '')
-    return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${mapCurrency(currency)}`;
+    return `${sign}${value?.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} ${printCurrency(currency)}`;
 }

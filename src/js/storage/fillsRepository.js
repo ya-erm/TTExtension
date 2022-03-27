@@ -2,7 +2,7 @@
 import { useReadTransaction, useReadTransactionMany } from './database.js';
 import { Repository } from "./repository.js";
 
-/** @typedef {import('../fill.js').Fill} Fill */
+/** @typedef {import('../types').Fill} Fill */
 
 /** Название хранилища в базе данных */
 const storeName = "fills";

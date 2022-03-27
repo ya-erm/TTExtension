@@ -1,6 +1,6 @@
 // @ts-check
-import { Fill } from "./fill.js";
-import { TTApi } from "./TTApi.js";
+import { findCandlesAsync, loadCandlesAsync } from "./data.js";
+import { storage } from "./storage.js";
 
 /**
   * Получить курс валюты
@@ -8,10 +8,13 @@ import { TTApi } from "./TTApi.js";
   * @param {string} to - в какую валюту
   */
 export function getCurrencyRate(from, to) {
+    from = from.toUpperCase()
+    to = to.toUpperCase()
+
     if (from == to) { return 1.0 }
 
     if ([from, to].includes("USD")) {
-        const usdToRub = TTApi.currencyRates["USD"]; // Доллар США
+        const usdToRub = storage.currencyRates["USD"]; // Доллар США
         if (!usdToRub) {
             throw new Error(`Failed to convert from ${from} to ${to}`)
         }
@@ -23,7 +26,7 @@ export function getCurrencyRate(from, to) {
     }
 
     if ([from, to].includes("EUR")) {
-        const eurToRub = TTApi.currencyRates["EUR"]; // Евро
+        const eurToRub = storage.currencyRates["EUR"]; // Евро
         if (!eurToRub) {
             throw new Error(`Failed to convert from ${from} to ${to}`)
         }
@@ -35,8 +38,8 @@ export function getCurrencyRate(from, to) {
     }
 
     if ([from, to].includes("EUR") && [from, to].includes("USD")) {
-        const usdToRub = TTApi.currencyRates["USD"];
-        const eurToRub = TTApi.currencyRates["EUR"];
+        const usdToRub = storage.currencyRates["USD"];
+        const eurToRub = storage.currencyRates["EUR"];
         if (!usdToRub || !eurToRub) {
             throw new Error(`Failed to convert from ${from} to ${to}`)
         }
@@ -57,8 +60,9 @@ export function getCurrencyRate(from, to) {
 export async function getPreviousDayClosePrice(figi, date = undefined) {
     if (figi == "RUB") { return 1; }
     const now = date ?? new Date();
-    const previousTradingDay = new Date(now.getTime());
-    previousTradingDay.setUTCHours(15);
+    const nowUtc = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
+    const previousTradingDay = new Date(nowUtc.getTime());
+    previousTradingDay.setUTCHours(0);
     previousTradingDay.setUTCMinutes(0);
     previousTradingDay.setUTCSeconds(0);
     previousTradingDay.setUTCMilliseconds(0);
@@ -67,12 +71,12 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
     } else {
         previousTradingDay.setUTCDate(previousTradingDay.getUTCDate() - 1);
     }
-    const toDate = new Date(previousTradingDay.getTime() + 8 * 60 * 60000); // Add 8 hours
+    const toDate = new Date(previousTradingDay.getTime() + 24 * 60 * 60000); // Add 24 hours
     // Ищем информацию о свечах в кэше
-    let candles = await TTApi.findCandlesAsync(figi, previousTradingDay, toDate, "hour");
+    let candles = await findCandlesAsync(figi, previousTradingDay, toDate, "hour");
     if (candles.length == 0) {
         // Если не нашли, загружаем из API
-        candles = await TTApi.loadCandlesAsync(figi, previousTradingDay, toDate, "hour");
+        candles = await loadCandlesAsync(figi, previousTradingDay, toDate, "hour");
     }
     if (candles.length > 0) {
         const lastCandle = candles[candles.length - 1];
@@ -105,13 +109,13 @@ export function calcPriceChange(previousDayPrice, currentPrice) {
 /**
  * Функция просчёта операций
  * @param {object} accumulated Накопленный результат
- * @param {Fill} fill Операция
+ * @param {import("./types.js").Fill} fill Операция
  */
 export function processFill(accumulated, fill) {
     let { currentQuantity, totalFixedPnL, averagePrice, averagePriceCorrected } = accumulated;
 
     const price = fill.price;
-    const quantity = fill.quantityExecuted;
+    const quantity = fill.lotsExecuted;
     const commission = Math.abs(fill.commission) || 0;
     const direction = -Math.sign(fill.payment)
     const cost = direction * price * quantity;

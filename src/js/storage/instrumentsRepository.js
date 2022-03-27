@@ -1,19 +1,8 @@
 // @ts-check
-import { useReadTransaction } from './database.js';
-import { Repository } from './repository.js';
+import { useReadTransaction } from "./database.js";
+import { Repository } from "./repository.js";
 
-/**
- * @typedef Instrument
- * @property {string} ticker - короткий идентификатор инструмента
- * @property {string} figi - идентификатор инструмента FIGI (Financial Instrument Global Identifier)
- * @property {string} isin - идентификатор инструмента ISIN (International Securities Identification Number)
- * @property {string} name - название инструмента
- * @property {string} currency - валюта инструмента (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY)
- * @property {string} type - тип инструмента (Stock, Bond, Etf, Currency)
- * @property {number} lot - размер лота
- * @property {number} minPriceIncrement - шаг цены инструмента
- * @property {object} candles - рыночные данные
- */
+/** @typedef {import('../types').Instrument} Instrument */
 
 /** Название хранилища в базе данных */
 const storeName = "instruments";
