@@ -112,7 +112,7 @@ export class Portfolio {
             const currencies = await TTApi2.loadCurrenciesAsync(this.account);
             this.updateCurrencies(currencies);
             // Просчитываем позиции по сделкам
-            this.calculatePositions();
+            this.calculatePositionsAsync();
 
             // Узнаём текущую цену нулевых позиций
             // TODO: загружать стаканы только для избранных позиций, т.к. много запросов
@@ -373,7 +373,7 @@ export class Portfolio {
     /**
      * Просчитать для позиций среднюю стоимость и зафиксированную прибыль
      */
-    async calculatePositions() {
+    async calculatePositionsAsync() {
         const now = new Date();
         // TODO: Ограничить значение 'from' если будут проблемы из-за слишком большого объёма данных
         // const lastYear = new Date(now.setFullYear(now.getFullYear() - 1));

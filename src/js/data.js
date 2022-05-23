@@ -51,6 +51,14 @@ export async function loadOperationsByFigiAsync(
         const commission = items.find((x) => x.id == dto.parentOperationId);
         return mapOperationDto(dto, accountId, toNumber(commission?.payment));
     });
+    operations
+    .filter(x => x.operationType === 'OPERATION_TYPE_BROKER_FEE')
+    .forEach(fee => {
+        const operation = operations.find(item => item.id === fee.parentOperationId);
+        if (operation && !operation.commission) {
+            operation.commission = fee.payment
+        }
+    })
 
     return operations;
 }

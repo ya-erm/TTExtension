@@ -43,6 +43,7 @@ export function mapOperationDto(dto, account, commission) {
         date: dto.date,
         figi: dto.figi,
         status: dto.state,
+        parentOperationId: dto.parentOperationId,
         operationType: dto.operationType,
         instrumentType: dto.instrumentType,
         currency: dto.currency,

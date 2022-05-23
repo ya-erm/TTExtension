@@ -3,6 +3,7 @@
  * @property {string} id - идентификатор сделки
  * @property {string} date - дата и время в ISO8601, например "2021-02-10T11:18:27.276+03:00"
  * @property {string?} figi - идентификатор инструмента FIGI
+ * @property {string?} parentOperationId - идентификатор родительской сделки
  * @property {import('../types.js').OperationState} status - статус заявки, например "Done"
  * @property {import('../types.js').OperationType} operationType - тип операции, например "Buy"
  * @property {import('../types.js').InstrumentType?} instrumentType - тип инструмента (Stock, Currency, Bond, Etf)
