@@ -1,38 +1,21 @@
 // @ts-check
-
 import {
     mapCandleInterval,
     mapHistoricCandleDto,
-    mapInstrumentDto,
     mapOperationDto,
     mapPortfolioPositionDto,
     toNumber,
 } from "./mapping.js";
 import candlesRepository from "./storage/candlesRepository.js";
-import instrumentsRepository from "./storage/instrumentsRepository.js";
 import { TTApi2 } from "./TTApi2.js";
 
-/**
- * Найти инструмент
- * @param {string} figi - идентификатор FIGI
- * @returns {Promise<import("./types.js").Instrument>}
- */
-export async function findInstrumentByFigiAsync(figi) {
-    let instrument = await instrumentsRepository.getOneByFigi(figi);
-    if (!instrument) {
-        const dto = await TTApi2.loadInstrumentByFigiAsync(figi);
-        instrument = mapInstrumentDto(dto);
-        instrumentsRepository.putOne(instrument);
-    }
-    return instrument;
-}
 
 /**
  * Загрузить операции
- * @param {string | null} figi - идентификатор
+ * @param {string?} figi - идентификатор
  * @param {string} accountId - идентификатор счёта
- * @param {Date} fromDate - начало интервала
- * @param {Date} toDate - окончание интервала
+ * @param {Date?} fromDate - начало интервала
+ * @param {Date?} toDate - окончание интервала
  * @returns {Promise<import("./types.js").Operation[]>}
  */
 export async function loadOperationsByFigiAsync(
@@ -41,7 +24,7 @@ export async function loadOperationsByFigiAsync(
     fromDate = undefined,
     toDate = undefined
 ) {
-    const items = await TTApi2.loadOperationsByFigiAsync(
+    const items = await TTApi2.fetchOperationsByFigiAsync(
         figi,
         accountId,
         fromDate,
@@ -52,13 +35,13 @@ export async function loadOperationsByFigiAsync(
         return mapOperationDto(dto, accountId, toNumber(commission?.payment));
     });
     operations
-    .filter(x => x.operationType === 'OPERATION_TYPE_BROKER_FEE')
-    .forEach(fee => {
-        const operation = operations.find(item => item.id === fee.parentOperationId);
-        if (operation && !operation.commission) {
-            operation.commission = fee.payment
-        }
-    })
+        .filter(x => x.operationType === 'OPERATION_TYPE_BROKER_FEE')
+        .forEach(fee => {
+            const operation = operations.find(item => item.id === fee.parentOperationId);
+            if (operation && !operation.commission) {
+                operation.commission = fee.payment
+            }
+        });
 
     return operations;
 }
@@ -68,8 +51,8 @@ export async function loadOperationsByFigiAsync(
  * @param {string} accountId - идентификатор счёта
  * @returns {Promise<import("./types.js").PortfolioPosition[]>}
  */
-export async function loadPortfolioAsync(accountId) {
-    const positions = await TTApi2.loadPortfolioAsync(accountId);
+export async function loadPortfolioPositionsAsync(accountId) {
+    const positions = await TTApi2.fetchPortfolioAsync(accountId);
     return positions.map(mapPortfolioPositionDto);
 }
 
@@ -78,7 +61,7 @@ export async function loadPortfolioAsync(accountId) {
  * @returns {Promise<import("./types").AccountDto[]>}
  */
 export async function loadAccountsAsync() {
-    return await TTApi2.loadAccountsAsync();
+    return await TTApi2.fetchAccountsAsync();
 }
 
 /**
@@ -116,7 +99,7 @@ export async function saveCandlesAsync(candles) {
  * @returns {Promise<import("./types.js").Candle[]>}
  */
 export async function loadCandlesAsync(figi, from, to, interval) {
-    const items = await TTApi2.loadCandlesAsync(
+    const items = await TTApi2.fetchCandlesAsync(
         figi,
         from,
         to,

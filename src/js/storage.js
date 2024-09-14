@@ -5,11 +5,12 @@ export const storage = {
     token: localStorage.getItem("token"),
 
     /** @type {Object<string, number>} */
-    currencyRates: {},
+    currencyRates: JSON.parse(localStorage.getItem("currencyRates") ?? '{}'),
 
     /** @type {Portfolio[]} */
-    portfolios: JSON.parse(localStorage.getItem("portfolios")) || [],
+    portfolios: JSON.parse(localStorage.getItem("portfolios") ?? '[]'),
 
+    /** @type {string?} */
     selectedPortfolio: localStorage.getItem("selectedPortfolio") || null,
 };
 
@@ -30,4 +31,9 @@ export function eraseData() {
 /** Сохранить портфели */
 export function savePortfolios() {
     localStorage.setItem("portfolios", JSON.stringify(storage.portfolios));
+}
+
+/** Сохранить курсы валют */
+export function saveCurrencyRates() {
+    localStorage.setItem("currencyRates", JSON.stringify(storage.currencyRates));
 }

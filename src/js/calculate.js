@@ -1,6 +1,7 @@
 // @ts-check
 import { findCandlesAsync, loadCandlesAsync } from "./data.js";
 import { storage } from "./storage.js";
+import { RUB_FIGI } from "./utils.js";
 
 /**
   * Получить курс валюты
@@ -11,7 +12,7 @@ export function getCurrencyRate(from, to) {
     from = from.toUpperCase()
     to = to.toUpperCase()
 
-    if (from == to) { return 1.0 }
+    if (from === to) { return 1.0 }
 
     if ([from, to].includes("USD")) {
         const usdToRub = storage.currencyRates["USD"]; // Доллар США
@@ -49,16 +50,21 @@ export function getCurrencyRate(from, to) {
         return usdToRub / eurToRub
     }
 
-    throw new Error(`Failed to convert from ${from} to ${to}`)
+    // общий случай
+    const fromToRub = storage.currencyRates[from];
+    const toToRub = storage.currencyRates[to];
+    return fromToRub / toToRub;
+
 }
 
 /**
  * Получить цену закрытия за предыдущий торговый день
  * @param {string} figi - идентификатор инструмента
- * @param {Date} date - текущая дата
+ * @param {Date?} date - текущая дата
+ * @returns {Promise<number?>}
  */
-export async function getPreviousDayClosePrice(figi, date = undefined) {
-    if (figi == "RUB") { return 1; }
+export async function getPreviousDayClosePrice(figi, date = null) {
+    if (figi == RUB_FIGI) return 1;
     const now = date ?? new Date();
     const nowUtc = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
     const previousTradingDay = new Date(nowUtc.getTime());
@@ -82,14 +88,16 @@ export async function getPreviousDayClosePrice(figi, date = undefined) {
         const lastCandle = candles[candles.length - 1];
         return lastCandle.c; // close price
     }
+    return null;
 }
 
 /**
  * Рассчитать изменение цены актива в процентах
- * @param {number} previousDayPrice 
- * @param {number} currentPrice 
+ * @param {number?} previousDayPrice 
+ * @param {number?} currentPrice 
  */
 export function calcPriceChangePercents(previousDayPrice, currentPrice) {
+    if (!previousDayPrice || !currentPrice) { return null }
     const change = 100 * currentPrice / previousDayPrice - 100;
     if (Math.abs(change) < 0.01) { return 0; }
     return change;
@@ -97,10 +105,11 @@ export function calcPriceChangePercents(previousDayPrice, currentPrice) {
 
 /**
  * Рассчитать изменение цены 
- * @param {number} previousDayPrice 
- * @param {number} currentPrice 
+ * @param {number?} previousDayPrice 
+ * @param {number?} currentPrice 
  */
 export function calcPriceChange(previousDayPrice, currentPrice) {
+    if (!previousDayPrice || !currentPrice) { return null }
     const change = currentPrice - previousDayPrice;
     if (Math.abs(change) < 0.01) { return 0; }
     return change;
@@ -116,7 +125,7 @@ export function processFill(accumulated, fill) {
 
     const price = fill.price;
     const quantity = fill.lotsExecuted;
-    const commission = Math.abs(fill.commission) || 0;
+    const commission = Math.abs(fill.commission ?? 0) ?? 0;
     const direction = -Math.sign(fill.payment)
     const cost = direction * price * quantity;
     const costCorrected = cost + commission;

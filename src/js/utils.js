@@ -47,6 +47,7 @@ export const dividendOperations = [
     "OPERATION_TYPE_DIVIDEND_TAX",
 ];
 
+export const RUB_FIGI = "RUB000UTSTOM";
 export const USD_FIGI = "BBG0013HGFT4";
 export const EUR_FIGI = "BBG0013HJJ31";
 export const TCS_FIGI = "BBG005DXJS36";
@@ -54,7 +55,7 @@ export const TCSG_FIGI = "BBG00QPYJ5H0";
 
 /**
  * Отображение денежного значения
- * @param {number} value Числовое значение
+ * @param {number?} value Числовое значение
  * @param {string} currency Валюта
  * @param {boolean} withSign true, если нужно добавить знак + перед положительным значением
  * @param {number} precision Количество знаков после запятой
@@ -74,9 +75,10 @@ export function printMoney(value, currency, withSign = false, precision = 2) {
 
 /**
  * CSS-класс цвета денежного значения (красный, зеленый)
- * @param {number} value Числовое денежное значение
+ * @param {number?} value Числовое денежное значение
  */
 export function getMoneyColorClass(value) {
+    if (!value) return "";
     if (value > 0) return "text-success";
     if (value < 0) return "text-danger";
     return "";
@@ -213,6 +215,8 @@ export function compareVersions(a, b) {
             return 1;
         }
     }
+    
+    return 0;
 }
 
 /**

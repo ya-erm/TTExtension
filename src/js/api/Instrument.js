@@ -1,6 +1,8 @@
 /**
  * @typedef InstrumentDto
  *
+ * @property {InstrumentType} instrumentType - Тип инструмента.
+ *
  * @property {string} figi - Figi-идентификатор инструмента.
  * @property {string} ticker - Тикер инструмента.
  * @property {string} classCode - Класс-код инструмента.
@@ -18,17 +20,42 @@
  * @property {string} exchange - Торговая площадка.
  * @property {string} countryOfRisk - Код страны риска, т.е. страны, в которой компания ведёт основной бизнес.
  * @property {string} countryOfRiskName - Наименование страны риска, т.е. страны, в которой компания ведёт основной бизнес.
- * @property {InstrumentType} instrumentType - Тип инструмента.
  * @property {SecurityTradingStatus} tradingStatus - Текущий режим торгов инструмента.
  * @property {bool} otcFlag - Признак внебиржевой ценной бумаги.
  * @property {bool} buyAvailableFlag - Признак доступности для покупки.
  * @property {bool} sellAvailableFlag - Признак доступности для продажи.
  * @property {import("./Quotation").Quotation} minPriceIncrement - Шаг цены.
- * @property {bool} apiTradeAvailableFlag - Признак доступности торгов через API.
+ * @property {boolean} apiTradeAvailableFlag - Параметр указывает на возможность торговать инструментом через API.
+ * @property {string} uid - Уникальный идентификатор инструмента.
+ * @property {string} positionUid - Уникальный идентификатор позиции инструмента.
+ * @property {boolean} forIisFlag - Признак доступности для ИИС.
+ * @property {boolean} forQualInvestorFlag - Флаг отображающий доступность торговли инструментом только для квалифицированных инвесторов.
+ * @property {boolean} weekendFlag - Флаг отображающий доступность торговли инструментом по выходным.
+ * @property {boolean} blockedTcaFlag - Флаг заблокированного ТКС.
+ * 
+ * @property {string?} isoCurrencyName - Строковый ISO-код валюты.
+ * 
+ * @property {{logoName: string}?} brand - Логотип.
+ */
+
+/** @typedef {Omit<(InstrumentDto), 'instrumentType'>} InstrumentBaseDto */
+
+/**
+ * @typedef {('share' | 'etf' | 'bond' | 'currency' | 'futures' | 'option' )} InstrumentType - Тип инструмента
  */
 
 /**
- * @typedef {('share' | 'etf' | 'bond' | 'currency' | 'futures' )} InstrumentType - Тип инструмента
+ * @typedef {(
+ * 'INSTRUMENT_TYPE_UNSPECIFIED' |
+ * 'INSTRUMENT_TYPE_BOND' |
+ * 'INSTRUMENT_TYPE_SHARE' |
+ * 'INSTRUMENT_TYPE_CURRENCY' |
+ * 'INSTRUMENT_TYPE_ETF' |
+ * 'INSTRUMENT_TYPE_FUTURES' |
+ * 'INSTRUMENT_TYPE_SP' |
+ * 'INSTRUMENT_TYPE_OPTION' |
+ * 'INSTRUMENT_TYPE_CLEARING_CERTIFICATE' |
+ * )} InstrumentKind
  */
 
 /**
@@ -70,5 +97,16 @@
  * SECURITY_TRADING_STATUS_DEALER_BREAK_IN_TRADING - Перерыв торговли в режиме внутренней ликвидности брокера
  * SECURITY_TRADING_STATUS_DEALER_NOT_AVAILABLE_FOR_TRADING - Недоступна торговля в режиме внутренней ликвидности брокера
  */
+
+
+/**
+ * @typedef CurrencyInstrumentProps
+ * 
+ * @property {string} isoCurrencyName - Строковый ISO-код валюты.
+ * @property {import("./MoneyValue").MoneyValue} nominal - Номинал.
+ */
+
+/** @typedef {InstrumentBaseDto & CurrencyInstrumentProps} CurrencyInstrumentDto */
+
 
 export {};

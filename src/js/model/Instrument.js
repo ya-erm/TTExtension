@@ -10,7 +10,9 @@
  * @property {import("../types").InstrumentType} type - тип инструмента (Stock, Bond, Etf, Currency)
  * @property {number} lot - размер лота
  * @property {number} minPriceIncrement - шаг цены инструмента
+ * @property {string} logo - логотип
  * Дополнительные свойства:
+ * @property {string?} isoCurrencyName - название валюты в формате ISO (только для валютных инструментов)
  * @property {object?} candles - свечи
  */
 

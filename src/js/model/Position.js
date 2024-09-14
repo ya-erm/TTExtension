@@ -8,7 +8,7 @@ export class Position {
      * @constructor
      * @param {string} portfolioId
      * @param {Partial<import("../types").PortfolioPosition>} item
-     * @param {{ticker: string, isin: string, name: string, currency: import("../types").Currency}} instrument
+     * @param {Partial<import("../types").Instrument>} instrument
      */
     constructor(portfolioId, item, instrument) {
         /** @type {string} короткий идентификатор */
@@ -29,6 +29,9 @@ export class Position {
         /** @type {import("../types").Currency} валюта (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY) */
         this.currency = instrument?.currency ?? item.currency;
 
+        /** @type {string} логотип */
+        this.logo = instrument?.logo;
+
         /** @type {number} количество */
         this.count = item.quantity
 
@@ -47,6 +50,9 @@ export class Position {
         /** @type {number?} текущая цена (последняя известная цена) */
         this.lastPrice = item.currentPrice;
         // this.lastPrice = item.expectedYield / item.quantity + item.averagePositionPrice
+
+        /** @type {Date?} дата последней известной цены */
+        this.lastPriceTimestamp = null;
 
         /** @type {Date?} дата последнего обновления цены */
         this.lastPriceUpdated = new Date();

@@ -70,6 +70,12 @@
                     </div>
                 </form>
                 <div class="text-center mb-2">
+                    <button id="refetch-instruments-button" type="button" class="btn btn-sm btn-outline-primary"
+                        title="Download actual data base of all instruments">
+                        <span class="mr-2"><i class="fa fa-rotate-right"></i></span>Refresh instruments DB (~6 Mb)
+                    </button>
+                </div>
+                <div class="text-center mb-2">
                     <button id="erase-button" type="button" class="btn btn-sm btn-outline-danger"
                         title="Token, positions and fills will be removed from browser storage">
                         <i class="fa fa-trash-o mr-2"></i>Clear all saved data
@@ -241,12 +247,12 @@
                             </div>
                             <div class="form-row mt-2">
                                 <div class="col">
-                                    <button type="submit" data-value="Buy"
-                                        class="btn btn-sm btn-success w-100">Buy</button>
+                                    <button type="submit" data-value="Buy" class="btn btn-sm btn-success w-100" disabled
+                                        title="Will be available soon">Buy</button>
                                 </div>
                                 <div class="col">
-                                    <button type="submit" data-value="Sell"
-                                        class="btn btn-sm btn-danger w-100">Sell</button>
+                                    <button type="submit" data-value="Sell" class="btn btn-sm btn-danger w-100" disabled
+                                        title="Will be available soon">Sell</button>
                                 </div>
                             </div>
                         </form>
@@ -368,7 +374,7 @@
                                 title="Open catalog in new tab">Don't know ticker?</a></div>
                     </div>
                     <div class="modal-footer justify-content-between">
-                        <button type="button" class="btn btn-secondary mt-2 button-all-tickers">
+                        <button type="button" id="button-all-tickers" class="btn btn-secondary mt-2">
                             <span class="spinner-border d-none mr-2" role="status">
                                 <span class="sr-only"></span>
                             </span>
@@ -377,7 +383,13 @@
                         </button>
                         <div class="m-0">
                             <button type="button" class="btn btn-secondary ml-2" data-dismiss="modal">Close</button>
-                            <button type="submit" class="btn btn-primary ml-2">Ok</button>
+                            <button type="submit" id="add-position-submit-button" class="btn btn-primary ml-2">
+                                <span class="spinner-border d-none mr-2" role="status">
+                                    <span class="sr-only"></span>
+                                </span>
+                                <span class="progress d-none"></span>
+                                <span class="text">Ok</span>
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -522,7 +534,7 @@
     <!-- <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" crossorigin="anonymous"></script> -->
 
     <!--Scripts-->
-    <script src="js/TTApi.js" type="module"></script>
+    <!-- <script src="js/TTApi.js" type="module"></script> -->
     <script src="js/popup.js" type="module"></script>
 </body>
 

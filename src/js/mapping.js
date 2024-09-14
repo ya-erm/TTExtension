@@ -74,6 +74,8 @@ export function mapInstrumentDto(dto) {
         type: dto.instrumentType,
         lot: dto.lot,
         minPriceIncrement: toNumber(dto.minPriceIncrement),
+        logo: dto.brand?.logoName,
+        isoCurrencyName: dto.isoCurrencyName,
         candles: undefined,
     };
 }

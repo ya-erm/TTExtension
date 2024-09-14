@@ -20,10 +20,12 @@ export class InstrumentsRepository extends Repository {
             migrate: (openDbRequest, version) => {
                 const db = openDbRequest.result;
                 switch (version) {
-                    case 0:
+                    case 0: {
                         const instrumentsStore = db.createObjectStore(storeName, { keyPath: "figi" });
-                        instrumentsStore.createIndex("tickerIndex", "ticker", { unique: true });
-                        instrumentsStore.createIndex("isinIndex", "isin", { unique: true });
+                        instrumentsStore.createIndex("tickerIndex", "ticker", { unique: false });
+                        instrumentsStore.createIndex("isinIndex", "isin", { unique: false });
+                        break;
+                    }
                 }
             }
         });
@@ -57,6 +59,6 @@ export class InstrumentsRepository extends Repository {
     }
 }
 
-const instrumentsRepository = new InstrumentsRepository();
+export const instrumentsRepository = new InstrumentsRepository();
 
 export default instrumentsRepository;

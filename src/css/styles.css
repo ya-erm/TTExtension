@@ -189,6 +189,19 @@
     to { top: 0.75rem; }
 }
 
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animation-rotate {
+    animation: rotate 1s linear infinite;
+}
+
 /* Trading */
 
 .trading-panel {

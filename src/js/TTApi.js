@@ -44,7 +44,10 @@ const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
  * @property {{[resource: string]: {[path: string]: QueuedRequestsGroup}}} queue
 */
 
-/** @type TTApi */
+/** 
+ * @type TTApi
+ * @deprecated User TTApi2 instead
+ */
 export const TTApi = {
 
     loadAccountsAsync,
