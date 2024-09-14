@@ -55,6 +55,14 @@ export class Repository {
     }
 
     /**
+     * Получить количество всех элементов в хранилище
+     * @returns {Promise<number>}
+     */
+    async getCount() {
+        return await useReadTransaction(this.dbParams, objectStore => objectStore.getAllKeys()).then(keys => keys.length);  
+    }
+
+    /**
      * Удалить элемент по идентификатору
      * @param {string} id - идентификатор элемента
      * @returns {Promise<void>}

@@ -4,7 +4,7 @@
  * @property {string} dbName - название базы данных
  * @property {number} dbVersion - версия базы данных
  * @property {string} storeName - название хранилища в базе данных
- * @property {(request: IDBOpenDBRequest, version: number) => void} migrate - функция миграции
+ * @property {(request: IDBOpenDBRequest, version: number, transaction: IDBTransaction) => void} migrate - функция миграции
  */
 
 /**
@@ -14,32 +14,34 @@
  */
 export function useDbContext(dbParams) {
     return new Promise((resolve, reject) => {
-        let openRequest = indexedDB.open(dbParams.dbName, dbParams.dbVersion);
+        const openRequest = indexedDB.open(dbParams.dbName, dbParams.dbVersion);
 
         openRequest.onupgradeneeded = function (evt) {
-            console.log(`Обновление версии базы данных "${dbParams.dbName}"`, ":", evt.oldVersion, "→", evt.newVersion)
+            console.log(`[DB] Обновление версии базы данных "${dbParams.dbName}"`, ":", evt.oldVersion, "→", evt.newVersion)
             let version = evt.oldVersion;
             while (version < evt.newVersion) {
-                console.debug("Выполняется миграция", version, "→", version + 1)
-                dbParams.migrate(openRequest, version);
+                console.debug(`[DB] Выполняется миграция (база данных "${dbParams.dbName}")`, version, "→", version + 1)
+                // @ts-ignore
+                const transaction = evt.target.transaction;
+                dbParams.migrate(openRequest, version, transaction);
                 version += 1;
             }
             openRequest.onsuccess = () => {
-                console.log(`Обновление базы данных "${dbParams.dbName}" выполнено успешно`);
+                console.log(`[DB] Обновление базы данных "${dbParams.dbName}" выполнено успешно`);
                 const db = openRequest.result;
                 resolve(db);
             }
         }
 
         openRequest.onerror = function () {
-            console.error(`Ошибка подключения к базе данных "${dbParams.dbName}"`, openRequest.error);
+            console.error(`[DB] Ошибка подключения к базе данных "${dbParams.dbName}"`, openRequest.error);
             reject(openRequest.error);
         };
 
         openRequest.onblocked = function () {
             // Если есть другое соединение к той же базе,
             // и оно не было закрыто после срабатывания на нём db.onversionchange
-            console.warn(`Подключение к базе данных "${dbParams.dbName}" заблокировано другим соединением`);
+            console.warn(`[DB] Подключение к базе данных "${dbParams.dbName}" заблокировано другим соединением`);
             reject(openRequest.error);
         };
 
@@ -49,7 +51,7 @@ export function useDbContext(dbParams) {
 
             // Если в другой вкладке запущено обновление до новой версии
             db.onversionchange = function () {
-                console.log(`Подключение к базе данных "${dbParams.dbName}" закрыто, т.к. выполняется обновление версии`);
+                console.log(`[DB] Подключение к базе данных "${dbParams.dbName}" закрыто, т.к. выполняется обновление версии`);
                 db.close();
                 reject(openRequest.error);
             };

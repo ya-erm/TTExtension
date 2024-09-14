@@ -1,28 +1,13 @@
 // @ts-check
-import { Portfolio } from "./portfolio.js";
+import { storage } from "./storage.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
-import { setClassIf } from "./utils.js";
+import { EUR_FIGI, setClassIf, TCSG_FIGI, TCS_FIGI, USD_FIGI } from "./utils.js";
 
 // https://tinkoff.github.io/invest-openapi/
 // https://tinkoff.github.io/invest-openapi/swagger-ui/
 
 const apiURL = 'https://api-invest.tinkoff.ru/openapi';
 const socketURL = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
-
-export const USD_FIGI = "BBG0013HGFT4"
-export const EUR_FIGI = "BBG0013HJJ31"
-export const TCS_FIGI = "BBG005DXJS36"
-export const TCSG_FIGI = "BBG00QPYJ5H0"
-
-/** @typedef {import('./storage/operationsRepository.js').Operation} Operation */
-/** @typedef {import('./storage/instrumentsRepository.js').Instrument} Instrument */
-
-const portfolios = JSON.parse(localStorage.getItem('portfolios')) || [];
-portfolios.forEach(portfolio => {
-    portfolio.__proto__ = Portfolio.prototype;
-    portfolio.fillMissingFields();
-});
-
 
 /** @typedef QueuedRequest
  * @property {(data: any) => void} resolve
@@ -36,17 +21,13 @@ portfolios.forEach(portfolio => {
     
 /**
  * @typedef TTApi
- * @property {string} token
- * @property {Object<string, number>} currencyRates
- * @property {Portfolio[]} portfolios
- 
+ *
  * @property {() => Promise<UserAccount[]>} loadAccountsAsync
  * @property {(account: string) => Promise<PortfolioPosition[]>} loadPortfolioAsync
  * @property {(account: string) => Promise<CurrencyPosition[]>} loadCurrenciesAsync
- * @property {(figi: string) => Promise<Instrument>} findInstrumentByFigiAsync
- * @property {(figi: string) => Promise<Instrument>} loadInstrumentByFigiAsync
- * @property {(ticker: string) => Promise<Instrument>} loadInstrumentByTickerAsync
- * @property {(figi: string | undefined, account: string, fromDate?: Date, toDate?: Date) => Promise<Operation[]>} loadOperationsByFigiAsync
+ * @property {(figi: string) => Promise<import("./types.js").Instrument>} loadInstrumentByFigiAsync
+ * @property {(ticker: string) => Promise<import("./types.js").Instrument>} loadInstrumentByTickerAsync
+ * @property {(figi: string | undefined, account: string, fromDate?: Date, toDate?: Date) => Promise<import("./types.js").Operation[]>} loadOperationsByFigiAsync
  * @property {(figi: string, account: string) => Promise<Order[]>} loadOrdersByFigiAsync
  * @property {(orderId: string, account: string) => Promise<any>} cancelOrderAsync
  * @property {(figi: string, from: Date, to: Date, interval: string) => Promise<Candle[]>} findCandlesAsync
@@ -59,23 +40,19 @@ portfolios.forEach(portfolio => {
  * @property {(path: string, priority?: number | null) => Promise<any>} httpGetAsync
  * @property {(path: string, body: object) => Promise<any>} httpPostAsync
  * 
- * @property {() => void} savePortfolios
- * @property {() => void} eraseData
- * 
  * @property {{[resource: string]: number}} requests
  * @property {{[resource: string]: {[path: string]: QueuedRequestsGroup}}} queue
 */
 
-/** @type TTApi */
+/** 
+ * @type TTApi
+ * @deprecated User TTApi2 instead
+ */
 export const TTApi = {
-    token: localStorage.getItem("token"),
-    currencyRates: {},
-    portfolios,
 
     loadAccountsAsync,
     loadPortfolioAsync,
     loadCurrenciesAsync,
-    findInstrumentByFigiAsync,
     loadInstrumentByFigiAsync,
     loadInstrumentByTickerAsync,
     loadOperationsByFigiAsync,
@@ -91,27 +68,12 @@ export const TTApi = {
     httpGetAsync,
     httpPostAsync,
 
-    savePortfolios,
-    eraseData,
-
     requests : {},
     queue: {},
 };
 
 // @ts-ignore
 window.TTApi = TTApi;
-
-/** Очистить все данные */
-function eraseData() {
-    TTApi.token = undefined;
-    TTApi.currencyRates = {};
-    TTApi.portfolios = [];
-}
-
-/** Сохранить портфели */
-function savePortfolios() {
-    localStorage.setItem("portfolios", JSON.stringify(TTApi.portfolios));
-}
 
 /** Ограничения */
 const requestLimits = {
@@ -260,7 +222,7 @@ async function httpGetAsync(path, priority = 0) {
  * @param {string} path - относительный адрес
  */
 async function _httpGetAsync(path) {
-    const response = await fetch(apiURL + path, { headers: { Authorization: 'Bearer ' + TTApi.token } });
+    const response = await fetch(apiURL + path, { headers: { Authorization: 'Bearer ' + storage.token} });
     if (response.status == 200) {
         const data = await response.json();
         console.debug(`GET ${path}\n`, data);
@@ -290,7 +252,7 @@ async function httpPostAsync(path, body) {
     const response = await fetch(apiURL + path, {
         method: 'POST',
         headers: {
-            Authorization: 'Bearer ' + TTApi.token,
+            Authorization: 'Bearer ' + storage.token,
             'Content-Type': 'application/json;charset=utf-8',
         },
         body: JSON.stringify(body)
@@ -364,7 +326,7 @@ async function loadPortfolioAsync(account) {
  * @param {string} account - идентификатор счёта
  * @param {Date} fromDate - начало интервала
  * @param {Date} toDate - окончание интервала
- * @returns {Promise<Operation[]>}
+ * @returns {Promise<import("./types.js").Operation[]>}
  */
 async function loadOperationsByFigiAsync(figi, account, fromDate = undefined, toDate = undefined) {
     const originalFigi = figi
@@ -379,9 +341,9 @@ async function loadOperationsByFigiAsync(figi, account, fromDate = undefined, to
         + (!!figi ? `&figi=${figi}` : "")
         + `&brokerAccountId=${account}`);
 
-    /** @type {Operation[]} */
-    const operations = payload.operations.map((/** @type {Operation} */ item) => {
-        if (item.figi == TCS_FIGI && item.currency == "RUB") {
+    /** @type {import("./types.js").Operation[]} */
+    const operations = payload.operations.map((/** @type {import("./types.js").Operation} */ item) => {
+        if (item.figi == TCS_FIGI && item.currency.toUpperCase() == "RUB") {
             item.figi = TCSG_FIGI
         }
         return { ...item, account }
@@ -389,10 +351,10 @@ async function loadOperationsByFigiAsync(figi, account, fromDate = undefined, to
 
     // Для тикера TCSG операции приходят вместе с операциями по figi от TCS, поэтому различаем их по валюте
     if (originalFigi == TCSG_FIGI) {
-        return operations.filter(item => item.currency == "RUB")
+        return operations.filter(item => item.currency.toUpperCase() == "RUB")
     }
     if (originalFigi == TCS_FIGI) {
-        return operations.filter(item => item.currency == "USD")
+        return operations.filter(item => item.currency.toUpperCase() == "USD")
     }
     return operations
 }
@@ -400,24 +362,22 @@ async function loadOperationsByFigiAsync(figi, account, fromDate = undefined, to
 /**
  * Загрузить инструмент
  * @param {string} figi - идентификатор
- * @returns {Promise<Instrument>}
+ * @returns {Promise<import("./types.js").Instrument>}
  */
 async function loadInstrumentByFigiAsync(figi) {
     const instrument = await httpGetAsync(`/market/search/by-figi?figi=${figi}`);
-    instrumentsRepository.putOne(instrument);
     return instrument;
 }
 
 /**
  * Загрузить инструмент
  * @param {string} ticker - идентификатор
- * @returns {Promise<Instrument>}
+ * @returns {Promise<import("./types.js").Instrument>}
  */
 async function loadInstrumentByTickerAsync(ticker) {
     const payload = await httpGetAsync(`/market/search/by-ticker?ticker=${ticker}`);
     if (payload.instruments.length > 0) {
         const instrument = payload.instruments[0];
-        instrumentsRepository.putOne(instrument);
         return instrument;
     }
     return null;
@@ -531,20 +491,6 @@ async function loadOrderbookByTickerAsync(ticker) {
 }
 
 /**
- * Найти инструмент
- * @param {string} figi - идентификатор FIGI
- * @returns {Promise<Instrument>}
- */
-async function findInstrumentByFigiAsync(figi) {
-    let instrument = await instrumentsRepository.getOneByFigi(figi);
-    if (!instrument) {
-        instrument = await loadInstrumentByFigiAsync(figi);
-        instrumentsRepository.putOne(instrument);
-    }
-    return instrument;
-}
-
-/**
  * Найти свечи в кэше
  * @param {string} figi - идентификатор FIGI
  * @param {Date} from 
@@ -567,7 +513,10 @@ async function findCandlesAsync(figi, from, to, interval) {
  */
 async function saveCandlesAsync(figi, candles) {
     if (candles.length == 0) { return; }
-    const instrument = await findInstrumentByFigiAsync(figi);
+    const instrument = await instrumentsRepository.getOneByFigi(figi)
+    if (!instrument) {
+        console.warn("Instrument", figi, "not found in DB")
+    }
     const interval = candles[0].interval;
     if (instrument.candles == undefined) {
         instrument.candles = {};
@@ -585,7 +534,7 @@ async function saveCandlesAsync(figi, candles) {
  * @returns {Promise<number>}
  */
 async function getCurrencyRateAsync(currency) {
-    let currencyRate = TTApi.currencyRates[currency];
+    let currencyRate = storage.currencyRates[currency];
     if (!currencyRate) {
         switch (currency) {
             case "USD":
@@ -599,7 +548,7 @@ async function getCurrencyRateAsync(currency) {
                 break;
         }
         console.log(currency, currencyRate)
-        TTApi.currencyRates[currency] = currencyRate;
+        storage.currencyRates[currency] = currencyRate;
     }
     return currencyRate;
 }

@@ -1,15 +1,19 @@
 // @ts-check
 import { calcPriceChange, calcPriceChangePercents, getCurrencyRate, getPreviousDayClosePrice } from "./calculate.js";
 import { showConfirm } from "./confirm.js";
-import { Fill, getFillLastTradeDate, printTrade, sortFills } from "./fill.js";
+import { loadAccountsAsync } from "./data.js";
+import { fetchAllInstruments, getInstrumentByTickerAsync, syncInstrumentsAsync } from "./instruments.js";
+import { mapOperationType, mapOrderDirection, mapOrderType, toNumber } from "./mapping.js";
+import { getFillLastTradeDate, sortFills } from "./model/Fill.js";
+import { Position } from "./model/Position.js";
 import { Portfolio } from "./portfolio.js";
-import { Position } from "./position.js";
+import { eraseData, savePortfolios, storage } from "./storage.js";
 import getFillsRepository from "./storage/fillsRepository.js";
 import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository from "./storage/operationsRepository.js";
 import { closeTab, createTab, findTab, findTabPane, openTab } from "./tabs.js";
-import { drawQueueStatus, TTApi } from "./TTApi.js";
-import { compareVersions, convertToSlug, getMoneyColorClass, mapInstrumentType, printDate, printMoney, printVolume, setClassIf } from "./utils.js";
+import { TTApi2 } from "./TTApi2.js";
+import { buySellOperations, compareVersions, convertToSlug, dividendOperations, getMoneyColorClass, printDate, printInstrumentTypeGroup, printMoney, printOperationType, printOperationTypeDescription, printTrade, printVolume, RUB_FIGI, setClassIf } from "./utils.js";
 
 async function checkForUpdatesAsync() {
     // @ts-ignore
@@ -23,17 +27,21 @@ async function checkForUpdatesAsync() {
     if (compareVersions(latestVersion, currentVersion) > 0) {
         console.log("Доступна новая версия", latestVersion, downloadUrl);
         const toastsContainer = document.querySelector(".toasts-container");
+        /** @type {HTMLTemplateElement} */
+        const toastTemplate = document.querySelector('#toast-template');
         /** @type {HTMLElement} */ // @ts-ignore
-        const toast = document.querySelector('#toast-template').content.firstElementChild.cloneNode(true);
+        const toast = toastTemplate.content.firstElementChild.cloneNode(true);
         setClassIf(toast, 'toast-down', true)
-        // @ts-ignore
         toast.querySelector(".toast-close").addEventListener("click", () => {
             toastsContainer.removeChild(toast);
         });
-        toast.querySelector(".toast-text").innerHTML = `
+        const toastText = toast.querySelector(".toast-text");
+        if (toastText) {
+        toastText.innerHTML = `
             <span class="mr-1">New version is available <a href="${releaseUrl}" target="_blank">${latestVersion}</a></span>
             <a href="${downloadUrl}" target="_blank"><button title="Download"><i class="fa fa-download"></i></button></a>
             <button id="refresh" title="Reload extension"><i class="fa fa-refresh"></i></button>`;
+        }
         // @ts-ignore
         toast.querySelector("#refresh").addEventListener('click', () => chrome.runtime.reload())
         toastsContainer.appendChild(toast);
@@ -42,45 +50,44 @@ async function checkForUpdatesAsync() {
 
 checkForUpdatesAsync();
 
-let selectedPortfolio = localStorage.getItem("selectedPortfolio");
-
 async function mainAsync() {
-    if (!!TTApi.token) {
+    if (!!storage.token) {
         // @ts-ignore
-        document.getElementById("token-input").value = TTApi.token;
-
-        await Promise.all([TTApi.getCurrencyRateAsync("USD"), TTApi.getCurrencyRateAsync("EUR")])
+        document.getElementById("token-input").value = storage.token;
 
         // Создаём вкладки для каждого портфеля
-        TTApi.portfolios.forEach(portfolio => {
+        storage.portfolios.forEach(portfolio => {
             createPortfolioTab(portfolio);
             // Отображаем позиции из памяти для выбранного портфеля
-            if (portfolio.id == selectedPortfolio) {
+            if (portfolio.id == storage.selectedPortfolio) {
                 drawPositions(portfolio);
                 openTab(`portfolio-${portfolio.id}`);
                 selectPortfolio(portfolio);
             }
         });
 
+        // Загружаем все инструменты, если они ещё не были загружены
+        await syncInstrumentsAsync();
+
         // Запрашиваем список счетов
-        const accounts = await TTApi.loadAccountsAsync();
+        const accounts = await loadAccountsAsync();
         // Создаём портфель для каждого счёта, если он ещё не существует
         accounts.forEach(account => {
-            if (!TTApi.portfolios.find(_ => _.account == account.brokerAccountId)) {
-                const title = account.brokerAccountType == "Tinkoff" ? "Основной" : "ИИС";
-                const id = account.brokerAccountType == "Tinkoff" ? "main" : "iia";
+            if (!storage.portfolios.find(_ => _.account == account.id)) {
+                const title = account.name;
+                const id = account.id;
                 const portfolio = new Portfolio(title, id);
-                portfolio.account = account.brokerAccountId;
-                TTApi.portfolios.push(portfolio);
-                TTApi.savePortfolios();
+                portfolio.account = account.id;
+                storage.portfolios.push(portfolio);
+                savePortfolios();
 
                 createPortfolioTab(portfolio);
             }
         });
 
         // Если нет выбранного портфеля, открываем вкладку первого портфеля
-        if (selectedPortfolio == undefined && TTApi.portfolios.length > 0) {
-            const portfolio = TTApi.portfolios[0];
+        if (!storage.selectedPortfolio && storage.portfolios.length > 0) {
+            const portfolio = storage.portfolios[0];
             openTab(`portfolio-${portfolio.id}`);
             selectPortfolio(portfolio);
         }
@@ -88,10 +95,12 @@ async function mainAsync() {
         // Загружаем новые позиции и обновляем таблицу
         loopLoadPortfolioAsync();
     } else {
-        // Открываем вкладку настроек    
+        // Открываем вкладку настроек
         openTab("settings");
-        // Скрываем кнопку очистки хранилища
-        setClassIf(eraseButton, "d-none", true);
+        setTimeout(() => {
+            // Скрываем кнопку очистки хранилища
+            setClassIf(eraseButton, "d-none", true);
+        }, 0)
     }
 }
 
@@ -104,11 +113,19 @@ mainAsync();
  * @param {Portfolio} portfolio
  */
 function selectPortfolio(portfolio) {
-    findTab(`portfolio-${selectedPortfolio}`)?.setAttribute("data-default", "false");
-    selectedPortfolio = portfolio.id;
-    localStorage.setItem("selectedPortfolio", selectedPortfolio);
+    findTab(`portfolio-${storage.selectedPortfolio}`)?.setAttribute("data-default", "false");
+    storage.selectedPortfolio = portfolio.id;
+    localStorage.setItem("selectedPortfolio", storage.selectedPortfolio);
     findTab(`portfolio-${portfolio.id}`)?.setAttribute("data-default", "true");
     fillPositionsFilterFields(portfolio);
+}
+
+/**
+ * Выбранный портфель
+ * @returns {Portfolio?}
+ */
+function getSelectedPortfolio() {
+    return storage.portfolios.find(item => item.id == storage.selectedPortfolio) ?? null;
 }
 
 /**
@@ -118,14 +135,14 @@ function selectPortfolio(portfolio) {
 function drawPositions(portfolio) {
     portfolio.positions.forEach(position => {
         addOrUpdatePosition(portfolio, position);
-        if (position.figi != "RUB") {
+        if (position.figi !== RUB_FIGI) {
             getPreviousDayClosePrice(position.figi)
                 .then(previousDayPrice => {
                     const positionRow = document.getElementById(`portfolio-${portfolio.id}_position-${position.figi}`);
                     /** @type {HTMLElement} */
                     const cellChange = positionRow?.querySelector("td.portfolio-change span");
                     if (cellChange) {
-                        position.previousDayPrice = previousDayPrice;
+                        position.previousDayPrice = previousDayPrice ?? null;
                         drawPriceChange(position, previousDayPrice, portfolio.settings.priceChangeUnit, cellChange);
                     }
                 });
@@ -141,7 +158,7 @@ function drawPositions(portfolio) {
  */
 function sortPositionsTable(portfolio) {
     const positionsComparer = portfolio.getComparer();
-    const getRowPosition = (tr) => portfolio.positions.find(item => item.figi == tr.id.split("position-")[1]);
+    const getRowPosition = (tr) => portfolio.positions.find(item => item.figi == tr.id.split("position-")[1]) ?? null;
     const rowsComparer = (a, b) => positionsComparer(getRowPosition(a), getRowPosition(b));
 
     document.querySelectorAll(`#portfolio-${portfolio.id}-table tbody`)
@@ -178,12 +195,12 @@ function createPortfolioTab(portfolio) {
     // Переключатель единицы измерения изменения ожидаемой прибыли (проценты, абсолютное значение)
     const portfolioExpectedUnitSwitch = tabPane.querySelector(".portfolio-expected-unit-switch");
     portfolioExpectedUnitSwitch.addEventListener("click", () => changePortfolioExpectedUnit(portfolio));
-    portfolioExpectedUnitSwitch.textContent = (portfolio.settings.expectedUnit == "Percents") ? "%" : "$";
+    portfolioExpectedUnitSwitch.textContent = (portfolio.settings.expectedUnit == "Percents") ? "%" : "₽";
 
     // Переключатель единицы измерения изменения цены за день (проценты, абсолютное значение)
     const priceChangeUnitSwitch = tabPane.querySelector(".price-change-unit-switch");
     priceChangeUnitSwitch.addEventListener("click", () => changePriceChangeUnit(portfolio));
-    priceChangeUnitSwitch.textContent = (portfolio.settings.priceChangeUnit == "Percents") ? "%" : "$";
+    priceChangeUnitSwitch.textContent = (portfolio.settings.priceChangeUnit == "Percents") ? "%" : "₽";
 
     addPortfolioSortButtonHandlers(portfolio);
 
@@ -193,14 +210,18 @@ function createPortfolioTab(portfolio) {
     positionRow.id = `portfolio-${portfolio.id}_position-summary`;
     setClassIf(positionRow, "cursor-pointer", false);
     const tfoot = document.querySelector(`#portfolio-${portfolio.id}-table tfoot.positions-summary-row`);
-    tfoot.appendChild(positionRow);
+    tfoot?.appendChild(positionRow);
 }
 
 // Обработчик события обновления позиции
 window.addEventListener("PositionUpdated", (event) => {
     /** @type {{position: Position}} */ // @ts-ignore
     const { position } = event.detail;
-    const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
+    const portfolio = storage.portfolios.find(portfolio => portfolio.id == position.portfolioId);
+    if (!portfolio) { 
+        console.error("[PositionUpdated] Portfolio not found", position.portfolioId);
+        return; 
+    }
     addOrUpdatePosition(portfolio, position);
     updatePositionSummaryRowAsync(portfolio);
 });
@@ -209,7 +230,11 @@ window.addEventListener("PositionUpdated", (event) => {
 window.addEventListener("PositionRemoved", function (event) {
     /** @type {{position: Position}} */ // @ts-ignore
     const { position } = event.detail;
-    const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == position.portfolioId);
+    const portfolio = storage.portfolios.find(portfolio => portfolio.id == position.portfolioId);
+    if (!portfolio) { 
+        console.error("[PositionRemoved] Portfolio not found", position.portfolioId);
+        return; 
+    }
     document.querySelector(`#portfolio-${portfolio.id}_position-${position.figi}`)?.remove();
     updatePositionSummaryRowAsync(portfolio);
 });
@@ -218,11 +243,10 @@ window.addEventListener("PositionRemoved", function (event) {
  * Загрузка портфеля
  */
 async function loadPortfolioAsync() {
-    const portfolio = TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio);
-    if (portfolio != undefined) {
-        await portfolio.loadPositions();
-        drawPositions(portfolio);
-    }
+    const portfolio = getSelectedPortfolio();
+    if (!portfolio) throw new Error("Selected portfolio not found");
+    await portfolio.loadPositionsAsync();
+    drawPositions(portfolio);
 }
 
 /**
@@ -265,14 +289,15 @@ function addPositionRow(portfolio, position) {
     positionRow.id = `portfolio-${portfolio.id}_position-${position.figi}`;
     /** @type {HTMLElement} */
     const cellAsset = positionRow.querySelector("td.portfolio-asset");
-    cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + position.instrumentType.toLowerCase() + "s/" + position.ticker;
-    cellAsset.querySelector("a").title = cellAsset.querySelector("a").href;
-    cellAsset.querySelector("span").textContent = position.instrumentType === "Stock"
+    cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + printInstrumentTypeGroup(position.instrumentType).toLowerCase() + "/" + position.ticker;
+    cellAsset.querySelector("a").title = position.figi;
+    cellAsset.querySelector("span").textContent = position.instrumentType === "share"
         ? position.ticker + ' - ' + position.name
         : position.name;
-    cellAsset.querySelector("span").title = cellAsset.querySelector("span").textContent;
+    cellAsset.querySelector("span").title = cellAsset?.querySelector("span")?.textContent;
+    const logo = position.logo?.replace(".png", "x160.png");
     // @ts-ignore
-    cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
+    cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://invest-brands.cdn-tinkoff.ru/${logo}")`;
 
     const bookMarkButton = cellAsset.querySelector(".portfolio-asset-bookmark");
     setClassIf(bookMarkButton, "portfolio-asset-bookmark-active", position.isFavourite);
@@ -281,7 +306,7 @@ function addPositionRow(portfolio, position) {
         position.isFavourite = !position.isFavourite;
         setClassIf(bookMarkButton, "portfolio-asset-bookmark-active", position.isFavourite);
         portfolio.sortPositions();
-        TTApi.savePortfolios();
+        savePortfolios();
         drawPositions(portfolio);
     })
 
@@ -291,7 +316,7 @@ function addPositionRow(portfolio, position) {
     if (!tbody.querySelector(".group-row")) {
         /** @type {HTMLElement} */ // @ts-ignore
         const groupRow = document.querySelector('#portfolio-group-row-template').content.firstElementChild.cloneNode(true);
-        groupRow.querySelector("td").textContent = mapInstrumentType(position.instrumentType);
+        groupRow.querySelector("td").textContent = printInstrumentTypeGroup(position.instrumentType);
         tbody.appendChild(groupRow);
     }
     tbody.appendChild(positionRow);
@@ -340,7 +365,7 @@ async function fillPositionRowAsync(portfolio, positionRow, position) {
     /** @type {HTMLElement} */
     const cellCount = positionRow.querySelector("td.portfolio-count");
     cellCount.textContent = printVolume(count);
-    setClassIf(cellCount, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
+    setClassIf(cellCount, "inaccurate-value-text", position.instrumentType != "currency" && inaccurateValue);
     if (inaccurateValue) {
         cellCount.title = `Calculated by fills: ${position.calculatedCount}\n` +
             `Actual value: ${position.count}`;
@@ -367,7 +392,7 @@ async function fillPositionRowAsync(portfolio, positionRow, position) {
     if (inaccurateValue) {
         instrumentsRepository.getOneByFigi(position.figi)
             .then(instrument => {
-                const precision = (instrument?.minPriceIncrement.toString().length ?? 4) - 2
+                const precision = Math.max(0, (instrument?.minPriceIncrement?.toString().length ?? 4) - 2)
                 cellAverage.title = 
                     `Calculated by fills: ${printMoney(position.calculatedAverage, null, false, precision)}\n` +
                     `Actual value: ${printMoney(position.average, null, false, precision)}`;
@@ -381,13 +406,16 @@ async function fillPositionRowAsync(portfolio, positionRow, position) {
     cellLast.textContent = printMoney(position.lastPrice, position.currency);
     if (!!position.lastPriceUpdated) {
         cellLast.title = "Updated at " + new Date(position.lastPriceUpdated).toTimeString().substring(0, 8);
+        if (position.lastPriceTimestamp) {
+            cellLast.title = new Date(position.lastPriceTimestamp).toISOString().substring(0, 19).replace("T", " ") + "\n" + cellLast.title;
+        }
     }
 
     const cellCost = positionRow.querySelector("td.portfolio-cost");
     cellCost.textContent = (position.count != 0)
         ? printMoney(position.count * position.lastPrice, position.currency)
         : "";
-    setClassIf(cellCost, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
+    setClassIf(cellCost, "inaccurate-value-text", position.instrumentType != "currency" && inaccurateValue);
 
     /** @type {HTMLElement} */
     const cellExpected = positionRow.querySelector("td.portfolio-expected span");
@@ -400,7 +428,7 @@ async function fillPositionRowAsync(portfolio, positionRow, position) {
         }
         cellExpected.title = printMoney(position.expected, position.currency, true);
         cellExpected.className = getMoneyColorClass(expected);
-        setClassIf(cellExpected, "inaccurate-value-text", position.instrumentType != "Currency" && inaccurateValue);
+        setClassIf(cellExpected, "inaccurate-value-text", position.instrumentType != "currency" && inaccurateValue);
     } else {
         cellExpected.textContent = "";
     }
@@ -473,6 +501,7 @@ async function updatePositionSummaryRowAsync(portfolio) {
     } */
     const total = await portfolio.positions.reduce(async (resultAsync, position) => {
         const result = await resultAsync;
+        if (position.instrumentType === 'futures') { return result }
         const inaccurateValue = isInaccurateValue(position);
         const count = inaccurateValue ? position.count : position.calculatedCount;
         const average = inaccurateValue ? position.average : position.calculatedAverage;
@@ -481,32 +510,32 @@ async function updatePositionSummaryRowAsync(portfolio) {
         result.expected[position.currency] ||= 0;
         result.fixedPnL[position.currency] ||= 0;
         result.cost[position.currency] += (count || 0) * (average || 0) + (expected || 0);
-        if (!excludeCurrenciesFromTotal || position.instrumentType != "Currency") {
+        if (!excludeCurrenciesFromTotal || position.instrumentType != "currency") {
             // Не учитываем валюты в total.expected и total.fixedPnl если активен параметр настроек excludeCurrenciesFromTotal
             result.expected[position.currency] += (expected || 0);
             const fixedPnL = await getFixedPnLForPeriodAsync(portfolio, position);
             result.fixedPnL[position.currency] += (fixedPnL || 0);
         }
-        return Promise.resolve(result);
+        return result;
     }, Promise.resolve({ cost: {}, expected: {}, fixedPnL: {} }));
 
     const selectedCurrency = localStorage["selectedCurrency"] || "RUB";
 
     let totalCostTitle = "Portfolio cost now \n";
     const totalCost = Object.keys(total.expected).reduce((result, key) => {
-        totalCostTitle += `${key}: ${printMoney(total.cost[key], key)}\n`;
+        totalCostTitle += `${key.toUpperCase()}: ${printMoney(total.cost[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.cost[key];
     }, 0);
 
     let totalExpectedTitle = "Total expected \n";
     const totalExpected = Object.keys(total.expected).reduce((result, key) => {
-        totalExpectedTitle += `${key}: ${printMoney(total.expected[key], key)}\n`;
+        totalExpectedTitle += `${key.toUpperCase()}: ${printMoney(total.expected[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.expected[key];
     }, 0);
 
     let totalFixedPnLTitle = (portfolio.settings.allDayPeriod == "All") ? "Total fixed P&L \n" : `Fixed P&L for a ${portfolio.settings.allDayPeriod} \n`;
     const totalFixedPnL = Object.keys(total.fixedPnL).reduce((result, key) => {
-        totalFixedPnLTitle += `${key}: ${printMoney(total.fixedPnL[key], key)}\n`;
+        totalFixedPnLTitle += `${key.toUpperCase()}: ${printMoney(total.fixedPnL[key], key)}\n`;
         return result + (key == selectedCurrency ? 1.0 : getCurrencyRate(key, selectedCurrency)) * total.fixedPnL[key];
     }, 0);
 
@@ -532,7 +561,10 @@ async function updatePositionSummaryRowAsync(portfolio) {
     const assetCell = positionRow.querySelector("td.portfolio-asset");
     assetCell.innerHTML = '<div class="d-flex justify-content-between">' +
         '<a href="#" class="btn-link">Operations</a>' +
-        '<div class="requests-queue d-none"><div class="spinner-border" role="status"><i class="sr-only"></i></div><span></span></div>' +
+        // TODO: кнопка загрузки операций
+        // '<button id="refetch-operations" class="btn btn-xs btn-icon btn-dark" title="Refetch operations"><i class="fa fa-rotate-right"></i></div>' +
+        // TODO: индикатор очереди запросов
+        // '<div class="requests-queue d-none"><div class="spinner-border" role="status"><i class="sr-only"></i></div><span></span></div>' +
         '</div>';
     assetCell.addEventListener("click", onOperationsLinkClick);
 
@@ -547,7 +579,8 @@ async function updatePositionSummaryRowAsync(portfolio) {
     const priceCell = positionRow.querySelector("td.portfolio-last");
     priceCell?.remove();
 
-    drawQueueStatus();
+    // TODO: отображение состояния очереди запросов
+    // drawQueueStatus();
 
     const totalCostSpanPrev = document.querySelector(".portfolio-total-cost");
     /** @type {HTMLElement} */ //@ts-ignore
@@ -591,12 +624,13 @@ function changeSelectedCurrency(portfolio, selectedCurrency) {
  * @param {Position} position
  */
 function onPositionClick(portfolio, position) {
-    if (position.figi == "RUB") { return; }
+    if (position.figi === RUB_FIGI) { return; }
     const ticker = position.ticker;
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(ticker)}`;
     // Если вкладка не существует
     if (!findTab(tabId)) {
         // Создаём и добавляем вкладку
+        // @ts-ignore
         const { tab, tabPane } = createTab("nav-tab-closable-template", "tab-pane-fills-template", ticker, tabId);
 
         tab.querySelector(".tab-close-button").addEventListener('click', () => closeTab(tabId));
@@ -609,17 +643,18 @@ function onPositionClick(portfolio, position) {
             });
 
         // Загружаем новые сделки и обновляем таблицу
-        portfolio.loadFillsByTicker(position.ticker)
+        portfolio.loadFillsByFigi(position.figi)
             .then((fills) => drawOperations(portfolio, position, fills));
 
         // Загружаем активные заявки
-        portfolio.loadOrdersByTicker(position.ticker)
+        portfolio.loadOrdersByFigi(position.figi)
             .then((orders) => {
                 position.orders = orders;
                 drawOrders(portfolio, position);
             });
 
         // Отображаем панель торговли
+        // TODO: не показывать панель торговли если токен только для чтения
         drawTradingPanelAsync(portfolio, position);
     }
     // Открываем вкладку
@@ -630,7 +665,7 @@ function onPositionClick(portfolio, position) {
  * Обработчик нажатия на ссылку операций
  */
 function onOperationsLinkClick() {
-    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    const portfolio = getSelectedPortfolio();
     const tabId = `portfolio-${portfolio.id}_operations`;
     // Если вкладка не существует
     if (!findTab(tabId)) {
@@ -650,8 +685,9 @@ function onOperationsLinkClick() {
             });
 
         // Загружаем новые операции и отображаем их
-        portfolio.loadOperations()
+        portfolio.loadOperationsAsync()
             .then((operations) => {
+                getOperationsRepository(portfolio.account).putMany(operations);
                 drawSystemOperationsAsync(portfolio, operations);
                 setClassIf(loadingSpinner, "d-none", true);
             });
@@ -672,12 +708,12 @@ function onPositionRemoveClick(portfolio, position) {
 /**
  * Отрисовка изменения цены актива
  * @param {Position} position позиция
- * @param {number} previousDayPrice цена актива за предыдущий день
+ * @param {number?} previousDayPrice цена актива за предыдущий день
  * @param {string} priceChangeUnit единица измерения: "Percents" или "Currency"
  * @param {HTMLElement} cellChange HTML элемент, в котором нужно отрисовать изменение цены
  */
 function drawPriceChange(position, previousDayPrice, priceChangeUnit, cellChange) {
-    if (!cellChange) { return; }
+    if (!cellChange || !previousDayPrice) { return; }
     let change = priceChangeUnit == "Percents"
         ? calcPriceChangePercents(previousDayPrice, position.lastPrice)
         : calcPriceChange(previousDayPrice, position.lastPrice);
@@ -700,13 +736,13 @@ function addPortfolioSortButtonHandlers(portfolio) {
         // @ts-ignore
         const field = sortButton.dataset.value;
         const sortButtonIcon = getSortButtonIcon(sortButton);
-        setClassIf(sortButtonIcon, 'd-none', portfolio.settings.sorting.field != field);
+        setClassIf(sortButtonIcon, 'd-none', portfolio.settings.sorting?.field != field);
         sortButton.addEventListener('click', () => {
             sortButtons.forEach(button => setClassIf(getSortButtonIcon(button), 'd-none', true));
-            if (portfolio.settings.sorting.field == field && portfolio.settings.sorting.ascending) {
+            if (portfolio.settings.sorting?.field == field && portfolio.settings.sorting?.ascending) {
                 portfolio.settings.sorting.ascending = false;
                 setClassIf(sortButtonIcon, 'd-none', false);
-            } else if (portfolio.settings.sorting.field == field && !portfolio.settings.sorting.ascending) {
+            } else if (portfolio.settings.sorting?.field == field && !portfolio.settings.sorting?.ascending) {
                 portfolio.settings.sorting.field = undefined;
                 portfolio.settings.sorting.ascending = true;
             } else {
@@ -715,7 +751,7 @@ function addPortfolioSortButtonHandlers(portfolio) {
             }
             sortButtonIcon.textContent = portfolio.settings.sorting.ascending ? "↓" : "↑";
             sortPositionsTable(portfolio);
-            TTApi.savePortfolios();
+            savePortfolios();
         })
     })
 }
@@ -728,7 +764,7 @@ function addPortfolioSortButtonHandlers(portfolio) {
  * Отрисовка сделок по активу
  * @param {Portfolio} portfolio
  * @param {Position} position
- * @param {Array<Fill>} fills 
+ * @param {import("./types.js").Fill[]} fills 
  */
 function drawOperations(portfolio, position, fills) {
     const tabId = `portfolio-${portfolio.id}_${convertToSlug(position.ticker)}`;
@@ -752,15 +788,15 @@ function drawOperations(portfolio, position, fills) {
         setClassIf(cellTime, "inaccurate-value-text", !!!getFillLastTradeDate(item))
 
         const cellType = fillRow.querySelector("td.fills-type span");
-        cellType.textContent = item.operationType == "BuyCard" ? "Buy" : item.operationType;
-        cellType.className = item.operationType === "Sell" ? "text-danger" : "text-success";
+        cellType.textContent = mapOperationType(item.operationType);
+        cellType.className =  cellType.textContent === "Sell" ? "text-danger" : "text-success";
 
         const cellPrice = fillRow.querySelector("td.fills-price");
         cellPrice.textContent = item.price.toFixed(2);
 
         const cellCount = fillRow.querySelector("td.fills-count");
         cellCount.textContent = (-Math.sign(item.payment) == -1 ? "-" : "+")
-            + (item.quantityExecuted ?? item.quantity);
+            + (item.lotsExecuted ?? item.lotsRequested);
 
         const cellPayment = fillRow.querySelector("td.fills-payment");
         cellPayment.textContent = item.payment.toFixed(2);
@@ -806,41 +842,46 @@ function drawOperations(portfolio, position, fills) {
 /**
  * Отрисовка прочих операций
  * @param {Portfolio} portfolio
- * @param {import("./storage/operationsRepository.js").Operation[]} operations
+ * @param {import("./types").Operation[]} operations
  */
 async function drawSystemOperationsAsync(portfolio, operations) {
     const tabId = `portfolio-${portfolio.id}_operations`;
     const filteredOperations = operations
-        .filter(item => !["Buy", "BuyCard", "Sell"].includes(item.operationType))
+        .filter(item => !buySellOperations.includes(item.operationType))
         .filter(item => operationsFilter.includes(item.operationType));
 
     const distinct = (value, index, self) => self.indexOf(value) === index;
     const positions = await Promise.all(filteredOperations
         .map(item => item.figi)
         .filter(distinct)
-        .filter(item => item != undefined)
-        .map(async (figi) => await portfolio.findPosition(figi)));
+        .filter(item => !!item)
+        .map(async (figi) => await portfolio.findOrCreatePositionAsync(figi)));
 
 
     let total = {}; // Сумма, сгруппированная по каждому типу и валюте
 
-    const applyStyleByType = (cell, operationType) => {
+    const applyStyleByType = (/** @type {Element} */ cell, /** @type {import("./types.js").OperationType} */ operationType) => {
         switch (operationType) {
-            case "BrokerCommission":
-            case "MarginCommission":
-            case "ServiceCommission":
-            case "TaxDividend":
-            case "Tax":
+            case "OPERATION_TYPE_BROKER_FEE":
+            case "OPERATION_TYPE_MARGIN_FEE":
+            case "OPERATION_TYPE_SERVICE_FEE":
+            case "OPERATION_TYPE_DIVIDEND_TAX":
+            case "OPERATION_TYPE_BOND_TAX":
+            case "OPERATION_TYPE_TAX":
+            case "OPERATION_TYPE_OVERNIGHT":
+            case "OPERATION_TYPE_WRITING_OFF_VARMARGIN":
                 cell.className = "text-danger";
                 break;
 
-            case "Dividend":
-            case "Coupon":
-            case "PayIn":
+            case "OPERATION_TYPE_DIVIDEND":
+            case "OPERATION_TYPE_COUPON":
+            case "OPERATION_TYPE_INPUT":
+            case "OPERATION_TYPE_ACCRUING_VARMARGIN":
                 cell.className = "text-success";
                 break;
 
-            case "PayOut":
+            case "OPERATION_TYPE_OUTPUT":
+            case "OPERATION_TYPE_TAX_CORRECTION":
                 cell.className = "text-warning";
                 break;
         }
@@ -868,21 +909,22 @@ async function drawSystemOperationsAsync(portfolio, operations) {
             cellPayment.textContent = printMoney(item.payment, item.currency);
 
             const cellType = fillRow.querySelector("td.money-type span");
-            cellType.textContent = item.operationType;
+            cellType.textContent = printOperationType(item.operationType);
             applyStyleByType(cellType, item.operationType);
 
             /** @type {HTMLElement} */
             const cellAsset = fillRow.querySelector("td.portfolio-asset");
-            if (["Dividend", "Coupon", "TaxDividend", "BrokerCommission"].includes(item.operationType)) {
+            if (dividendOperations.includes(item.operationType) || item.operationType === 'OPERATION_TYPE_BROKER_FEE') {
                 const position = positions.find(position => position.figi == item.figi);
                 if (position != undefined) {
-                    cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + position.instrumentType.toLowerCase() + "s/" + position.ticker;
+                    cellAsset.querySelector("a").href = "https://www.tinkoff.ru/invest/" + printInstrumentTypeGroup(position.instrumentType).toLowerCase() + "/" + position.ticker;
                     cellAsset.querySelector("a").title = cellAsset.querySelector("a").href;
-                    cellAsset.querySelector("span").textContent = position.instrumentType === "Stock"
+                    cellAsset.querySelector("span").textContent = position.instrumentType === "share"
                         ? position.ticker + ' - ' + position.name
                         : position.name;
+                    const logo = position.logo?.replace(".png", "x160.png");
                     //@ts-ignore
-                    cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://static.tinkoff.ru/brands/traiding/${position.isin}x160.png")`;
+                    cellAsset.querySelector(".portfolio-logo").style["backgroundImage"] = `url("https://invest-brands.cdn-tinkoff.ru/${logo}")`;
                 }
                 else {
                     cellAsset.textContent = item.figi;
@@ -912,12 +954,15 @@ async function drawSystemOperationsAsync(portfolio, operations) {
     const selectedCurrency = localStorage["selectedCurrency"] || "RUB";
 
     Object.keys(total)
-        //.filter(key => ["MarginCommission", "ServiceCommission", "Dividend", "Coupon"].includes(key))
+        // @ts-ignore
         .sort((a, b) => operationTypes.indexOf(a) - operationTypes.indexOf(b))
         .forEach(key => {
+            /** @type {import("./types.js").OperationType} */ // @ts-ignore
+            const operationType = key
+            
             const group = total[key];
             let totalValue = 0;
-            let totalValueTitle = `Total ${key} \n`;
+            let totalValueTitle = `${printOperationTypeDescription(operationType)}\n`;
             let inaccurateValueErrors = []
 
             // Конвертируем из других валют в выбранную
@@ -929,7 +974,7 @@ async function drawSystemOperationsAsync(portfolio, operations) {
                     console.error('Failed to get currency rate', currency, selectedCurrency);
                     inaccurateValueErrors.push(`Не удалось определить курс ${currency} к ${selectedCurrency}`)
                 }
-                totalValueTitle += `${currency}: ${printMoney(group[currency], currency)}\n`;
+                totalValueTitle += `${currency.toUpperCase()}: ${printMoney(group[currency], currency)}\n`;
             });
 
             /** @type {HTMLElement} */ //@ts-ignore
@@ -943,8 +988,8 @@ async function drawSystemOperationsAsync(portfolio, operations) {
 
             /** @type {HTMLElement} */
             const cellType = fillRow.querySelector("td.money-type span");
-            cellType.textContent = key;
-            applyStyleByType(cellType, key);
+            cellType.textContent = printOperationType(operationType);
+            applyStyleByType(cellType, operationType);
             cellType.title = totalValueTitle.trimEnd();
             cellType.classList.add("cursor-help");
 
@@ -965,8 +1010,8 @@ function drawOrders(portfolio, position) {
     const tbody = document.querySelector(`#${tabId} table.table-fills tbody.orders`)
     tbody.innerHTML = "";
 
-    const orders = position.orders.sort((a, b) => b.price - a.price);
-    orders.forEach(item => {
+    const orders = position.orders.sort((a, b) => toNumber(b.initialOrderPrice) - toNumber(a.initialOrderPrice));
+    orders.forEach(order => {
         /** @type {HTMLElement} */ //@ts-ignore
         const orderRow = document.querySelector("#fills-row-template").content.firstElementChild.cloneNode(true);
 
@@ -975,10 +1020,12 @@ function drawOrders(portfolio, position) {
 
         deleteButton.addEventListener("click", async () => {
             try {
-                await TTApi.cancelOrderAsync(item.orderId, portfolio.account);
-                tbody.removeChild(orderRow);
+                // TODO: use API v2
+                // await TTApi.cancelOrderAsync(order.orderId, portfolio.account);
+                // tbody.removeChild(orderRow);
+                throw new Error("Cancel order is not implemented yet");
             } catch (e) {
-                console.error(`Не удалось отменить заявку #${item.orderId}`);
+                console.error(`Не удалось отменить заявку #${order.orderId}`);
             }
         });
 
@@ -987,20 +1034,20 @@ function drawOrders(portfolio, position) {
         cellIndex.appendChild(deleteButton);
 
         const cellTime = orderRow.querySelector("td.fills-time");
-        cellTime.textContent = `${item.type} order`;
+        cellTime.textContent = `${mapOrderType(order.orderType)} order`;
 
         const cellType = orderRow.querySelector("td.fills-type span");
-        cellType.textContent = item.operation;
-        cellType.className = item.operation === "Sell" ? "text-danger" : "text-success";
+        cellType.textContent = mapOrderDirection(order.direction);
+        cellType.className = order.direction === "ORDER_DIRECTION_SELL" ? "text-danger" : "text-success";
 
         const cellPrice = orderRow.querySelector("td.fills-price");
-        cellPrice.textContent = item.price.toFixed(2);
+        cellPrice.textContent = toNumber(order.initialOrderPrice).toFixed(2);
 
         const cellCount = orderRow.querySelector("td.fills-count");
-        cellCount.textContent = (item.operation === "Sell" ? "-" : "+") + (item.requestedLots);
+        cellCount.textContent = (order.direction === "ORDER_DIRECTION_SELL" ? "-" : "+") + (order.lotsRequested);
 
         const cellPayment = orderRow.querySelector("td.fills-payment");
-        cellPayment.textContent = (item.price * item.requestedLots).toFixed(2);
+        cellPayment.textContent = (toNumber(order.initialOrderPrice) * order.lotsRequested).toFixed(2);
 
         tbody.append(orderRow);
     });
@@ -1065,17 +1112,22 @@ async function drawTradingPanelAsync(portfolio, position) {
             price: parseFloat(inputPrice.value),
         };
 
-        showConfirm(
-            `Confirm to ${order.operation.toLowerCase()} ${position.ticker}?`,
-            `Price: ${printMoney(order.price, instrument.currency)}\r\n`
-            + `Lots: ${order.lots}\r\n`
-            + `Cost: ${printMoney(order.price * order.lots, instrument.currency)}`,
-            async () => {
-                const item = await TTApi.placeLimitOrderAsync(position.figi, order, portfolio.account);
-                position.orders.push(item);
-                drawOrders(portfolio, position);
-            }
-        );
+        // TODO: use API v2
+        showConfirm('This feature will be available soon','This action is not implemented yet', async () => {})
+
+        // showConfirm(
+        //     `Confirm to ${order.operation.toLowerCase()} ${position.ticker}?`,
+        //     `Price: ${printMoney(order.price, instrument.currency)}\r\n`
+        //     + `Lots: ${order.lots}\r\n`
+        //     + `Cost: ${printMoney(order.price * order.lots, instrument.currency)}`,
+        //     async () => {
+        //         // @ts-ignore
+        //         // TODO: use API v2
+        //         // const item = await TTApi.placeLimitOrderAsync(position.figi, order, portfolio.account);
+        //         // position.orders.push(item); // TODO
+        //         // drawOrders(portfolio, position);
+        //     }
+        // );
     });
 }
 
@@ -1102,9 +1154,9 @@ eraseButton.addEventListener("click", (e) => {
     // Очищаем хранилище и страницу
     localStorage.clear();
     //@ts-ignore
-    document.getElementById("token-input").value = "";
-    //@ts-ignore
     $("#portfolio-table tbody").children().remove();
+    //@ts-ignore
+    $(".positions-summary-row").children().remove();
     //@ts-ignore
     $(".nav-item[data-closable='true']").remove();
     document.querySelectorAll(".nav-item")
@@ -1116,11 +1168,19 @@ eraseButton.addEventListener("click", (e) => {
     document.querySelector(".portfolio-total-cost").innerHTML = "";
     getOperationsRepository("").dropDatabase();
     getFillsRepository("").dropDatabase();
-    instrumentsRepository.dropDatabase();
-    TTApi.eraseData();
+    eraseData();
     // Скрываем кнопку очистки хранилища
     setClassIf(e.target, "d-none", true);
-    close();
+    // close();
+});
+
+const refreshInstrumentsButton = document.getElementById("refetch-instruments-button");
+refreshInstrumentsButton.addEventListener("click", async () => {
+    const icon = refreshInstrumentsButton.querySelector('span > i');
+    icon.classList.add('animation-rotate');
+    await instrumentsRepository.dropDatabase();
+    await fetchAllInstruments();
+    icon.classList.remove('animation-rotate');
 });
 
 /**
@@ -1146,7 +1206,7 @@ function changePortfolioAllDay(portfolio) {
     const portfolioAllDaySwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-all-day-switch`);
     portfolioAllDaySwitch.textContent = portfolio.settings.allDayPeriod;
     drawPositions(portfolio);
-    TTApi.savePortfolios();
+    savePortfolios();
 }
 
 /**
@@ -1156,9 +1216,9 @@ function changePortfolioAllDay(portfolio) {
 function changePriceChangeUnit(portfolio) {
     portfolio.settings.priceChangeUnit = (portfolio.settings.priceChangeUnit == "Percents") ? "Absolute" : "Percents";
     const priceChangeUnitSwitch = document.querySelector(`#portfolio-${portfolio.id} .price-change-unit-switch`);
-    priceChangeUnitSwitch.textContent = (portfolio.settings.priceChangeUnit == "Percents") ? "%" : "$";
+    priceChangeUnitSwitch.textContent = (portfolio.settings.priceChangeUnit == "Percents") ? "%" : "₽";
     drawPositions(portfolio);
-    TTApi.savePortfolios();
+    savePortfolios();
 }
 
 /**
@@ -1168,9 +1228,9 @@ function changePriceChangeUnit(portfolio) {
 function changePortfolioExpectedUnit(portfolio) {
     portfolio.settings.expectedUnit = (portfolio.settings.expectedUnit == "Percents") ? "Absolute" : "Percents";
     const portfolioExpectedUnitSwitch = document.querySelector(`#portfolio-${portfolio.id} .portfolio-expected-unit-switch`);
-    portfolioExpectedUnitSwitch.textContent = (portfolio.settings.expectedUnit == "Percents") ? "%" : "$";
+    portfolioExpectedUnitSwitch.textContent = (portfolio.settings.expectedUnit == "Percents") ? "%" : "₽";
     drawPositions(portfolio);
-    TTApi.savePortfolios();
+    savePortfolios();
 }
 
 /**
@@ -1182,7 +1242,7 @@ excludeCurrenciesFromTotalCheckbox.checked = (localStorage["excludeCurrenciesFro
 excludeCurrenciesFromTotalCheckbox.addEventListener("change", (e) => {
     // @ts-ignore
     localStorage.setItem("excludeCurrenciesFromTotal", e.target.checked);
-    updatePositionSummaryRowAsync(TTApi.portfolios.find(portfolio => portfolio.id == selectedPortfolio));
+    updatePositionSummaryRowAsync(storage.portfolios.find(portfolio => portfolio.id == storage.selectedPortfolio));
 });
 
 // #endregion
@@ -1198,7 +1258,7 @@ tokenForm.addEventListener("submit", (e) => {
     const data = new FormData(tokenForm);
     const token = data.get("token").toString();
     localStorage.setItem("token", token);
-    TTApi.token = token;
+    storage.token = token;
 
     setClassIf(eraseButton, "d-none", false);
 
@@ -1226,45 +1286,64 @@ addPositionInput.oninput = function () {
     addPositionError.textContent = "";
 };
 
-addPositionForm.addEventListener("submit", (e) => {
+addPositionForm.addEventListener("submit", async (e) => {
     if (e.preventDefault) { e.preventDefault(); }
 
+    const submitButton = addPositionForm.querySelector("#add-position-submit-button");
+    const submitButtonSpinner = submitButton.querySelector(".spinner-border");
+
     const data = new FormData(addPositionForm);
-    const ticker = data.get("position-ticker").toString().toUpperCase();
+    const ticker = data.get("position-ticker")?.toString().toUpperCase();
+    const portfolio = getSelectedPortfolio();
 
-    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    if (!ticker || !portfolio) return;
 
-    // Загружаем сделки по инструменту
-    portfolio.loadFillsByTicker(ticker)
-        .then(_ => TTApi.loadOrderbookByTickerAsync(ticker))
-        .then(orderbook => {
-            addPositionInput.value = "";
-            // @ts-ignore
-            $('#add-position-modal').modal('hide');
-            // Проставляем последнюю цену
-            const position = portfolio.positions.find(item => item.ticker == ticker);
-            position.lastPrice = orderbook.lastPrice;
-            drawPositions(portfolio);
-        })
-        .catch(error => {
-            addPositionError.textContent = error.message;
-        });
+    try {
+        setClassIf(submitButtonSpinner, 'd-none', false);
+        // Загружаем сделки по инструменту
+        const instrument = await getInstrumentByTickerAsync(ticker);
+        if (!instrument) {
+            throw new Error(`Instrument with ticker ${ticker} not found`);
+        }
+        await portfolio.loadFillsByFigi(instrument.figi);
+        await TTApi2.fetchOrderbookAsync(instrument.figi)
+            .then(orderbook => {
+                // Проставляем последнюю цену
+                const position = portfolio.positions.find(item => item.ticker == ticker);
+                position.lastPriceUpdated = new Date();
+                position.lastPriceTimestamp = new Date(orderbook.lastPriceTs);
+                position.lastPrice = toNumber(orderbook.lastPrice);
+                drawPositions(portfolio);
+            });
 
+        portfolio.save();
+
+        addPositionInput.value = "";
+        // @ts-ignore
+        $('#add-position-modal').modal('hide');
+    }
+    catch(error) {
+        addPositionError.textContent = error.message;
+    }
+    finally {
+        setClassIf(submitButtonSpinner, 'd-none', true);
+    }
     return false;
+
 });
 
-const addAllTickerButton = addPositionForm.querySelector(".button-all-tickers");
+const addAllTickerButton = addPositionForm.querySelector("#button-all-tickers");
 addAllTickerButton.addEventListener("click", async() => {
     const spinner = addAllTickerButton.querySelector(".spinner-border");
-    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    const portfolio = getSelectedPortfolio();
     try {
         setClassIf(spinner, 'd-none', false);
-        const operations = await portfolio.loadOperations()
+        const operations = await portfolio.loadOperationsAsync()
         await portfolio.operationsRepository.putMany(operations);
-        /** @type {{[figi: string]: import("./storage/operationsRepository.js").Operation[]}} */
+        /** @type {{[figi: string]: import("./types.js").Operation[]}} */
         const groups = operations
-            .filter(item => ["Buy", "BuyCard", "Sell"].includes(item.operationType))
-            .filter(item => item.status == 'Done')
+            .filter(item => buySellOperations.includes(item.operationType))
+            .filter(item => item.status == 'OPERATION_STATE_EXECUTED')
             .filter(item => item.figi)
             .reduce((groups, item) => {
                 (groups[item.figi] = groups[item.figi] || []).push(item);
@@ -1272,7 +1351,7 @@ addAllTickerButton.addEventListener("click", async() => {
             }, {});
         for (let figi in groups) {
             try {
-                const position = await portfolio.findPosition(figi);
+                const position = await portfolio.findOrCreatePositionAsync(figi);
                 portfolio.addPosition(position);
                 await portfolio.updateFills(position, groups[figi]);
             }
@@ -1331,13 +1410,13 @@ filterPositionsForm.addEventListener("submit", (e) => {
         filterPositionsError.textContent = "";
     }
 
-    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    const portfolio = getSelectedPortfolio();
     if (JSON.stringify(filter) == JSON.stringify(defaultFilter)) {
         delete portfolio.settings.filter;
     } else {
         portfolio.settings.filter = filter;
     }
-    TTApi.savePortfolios();
+    savePortfolios();
 
     applyFilterPositionsButtonStyle(portfolio);
 
@@ -1363,6 +1442,7 @@ function applyFilterPositionsButtonStyle(portfolio) {
  */
 function fillPositionsFilterFields(portfolio) {
     applyFilterPositionsButtonStyle(portfolio);
+    const filterPositionsForm = document.getElementById("filter-positions-form");
     const setCheckBoxValue = (query, value) => filterPositionsForm.querySelector(query).checked = value;
     // Currencies
     setCheckBoxValue("#filter-positions-currency-rub", portfolio.settings.filter?.currencies?.rub ?? true);
@@ -1395,18 +1475,55 @@ filterOperationsForm.querySelector("#filter-operations-select-none").addEventLis
         .forEach(checkbox => checkbox.checked = false);
 });
 
+/** @type {import("./types.js").OperationType[]} */
 const operationTypes = [
-    "PayIn",
-    "Dividend",
-    "Coupon",
-    "BrokerCommission",
-    "MarginCommission",
-    "ServiceCommission",
-    "TaxDividend",
-    "Tax",
-    "PayOut",
+    'OPERATION_TYPE_INPUT',
+    'OPERATION_TYPE_BOND_TAX',
+    'OPERATION_TYPE_OUTPUT_SECURITIES',
+    'OPERATION_TYPE_OVERNIGHT',
+    'OPERATION_TYPE_TAX',
+    'OPERATION_TYPE_BOND_REPAYMENT_FULL',
+    'OPERATION_TYPE_SELL_CARD',
+    'OPERATION_TYPE_DIVIDEND_TAX',
+    'OPERATION_TYPE_OUTPUT',
+    'OPERATION_TYPE_BOND_REPAYMENT',
+    'OPERATION_TYPE_TAX_CORRECTION',
+    'OPERATION_TYPE_SERVICE_FEE',
+    'OPERATION_TYPE_BENEFIT_TAX',
+    'OPERATION_TYPE_MARGIN_FEE',
+    'OPERATION_TYPE_BUY',
+    'OPERATION_TYPE_BUY_CARD',
+    'OPERATION_TYPE_INPUT_SECURITIES',
+    'OPERATION_TYPE_SELL_MARGIN',
+    'OPERATION_TYPE_BROKER_FEE',
+    'OPERATION_TYPE_BUY_MARGIN',
+    'OPERATION_TYPE_DIVIDEND',
+    'OPERATION_TYPE_SELL',
+    'OPERATION_TYPE_COUPON',
+    'OPERATION_TYPE_SUCCESS_FEE',
+    'OPERATION_TYPE_DIVIDEND_TRANSFER',
+    'OPERATION_TYPE_ACCRUING_VARMARGIN',
+    'OPERATION_TYPE_WRITING_OFF_VARMARGIN',
+    'OPERATION_TYPE_DELIVERY_BUY',
+    'OPERATION_TYPE_DELIVERY_SELL',
+    'OPERATION_TYPE_TRACK_MFEE',
+    'OPERATION_TYPE_TRACK_PFEE',
+    'OPERATION_TYPE_TAX_PROGRESSIVE',
+    'OPERATION_TYPE_BOND_TAX_PROGRESSIVE',
+    'OPERATION_TYPE_DIVIDEND_TAX_PROGRESSIVE',
+    'OPERATION_TYPE_BENEFIT_TAX_PROGRESSIVE',
+    'OPERATION_TYPE_TAX_CORRECTION_PROGRESSIVE',
+    'OPERATION_TYPE_TAX_REPO_PROGRESSIVE',
+    'OPERATION_TYPE_TAX_REPO',
+    'OPERATION_TYPE_TAX_REPO_HOLD',
+    'OPERATION_TYPE_TAX_REPO_REFUND',
+    'OPERATION_TYPE_TAX_REPO_HOLD_PROGRESSIVE',
+    'OPERATION_TYPE_TAX_REPO_REFUND_PROGRESSIVE',
+    'OPERATION_TYPE_DIV_EXT',
+    'OPERATION_TYPE_TAX_CORRECTION_COUPON',
 ];
 const defaultOperationsFilter = operationTypes;
+// @ts-ignore
 let operationsFilter = JSON.parse(localStorage.getItem('operationsFilter')) || defaultOperationsFilter;
 
 // @ts-ignore
@@ -1427,7 +1544,8 @@ function addFilterOperationsCheckboxes() {
         checkboxInput.checked = operationsFilter.includes(item);
 
         const checkboxLabel = checkbox.querySelector('label');
-        checkboxLabel.textContent = item;
+        checkboxLabel.textContent = printOperationType(item);
+        checkboxLabel.title = item + "\n" + printOperationTypeDescription(item);
         checkboxLabel.setAttribute("for", item);
 
         fragment.appendChild(checkbox);
@@ -1459,7 +1577,7 @@ filterOperationsForm.addEventListener("submit", async (e) => {
     const filterOperationsButton = document.querySelector('button[data-target="#filter-operations-modal"]');
     setClassIf(filterOperationsButton, "text-primary", operationsFilter.length != defaultOperationsFilter.length);
 
-    const portfolio = TTApi.portfolios.find(item => item.id == selectedPortfolio);
+    const portfolio = getSelectedPortfolio();
 
     const operations = await getOperationsRepository(portfolio.account).getAllByTypes(operationsFilter);
     drawSystemOperationsAsync(portfolio, operations);

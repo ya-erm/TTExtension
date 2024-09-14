@@ -1,25 +1,8 @@
 // @ts-check
-import { useReadTransaction, useReadTransactionMany } from './database.js';
-import { Repository } from './repository.js';
+import { useReadTransaction, useReadTransactionMany } from "./database.js";
+import { Repository } from "./repository.js";
 
-/**
- * @typedef Operation
- * @property {string} id - идентификатор сделки
- * @property {string} date - дата и время в ISO8601, например "2021-02-10T11:18:27.276+03:00"
- * @property {string} status - статус заявки, например "Done"
- * @property {string} operationType - тип операции, например "Buy"
- * @property {string} currency - валюта инструмента (RUB, USD, EUR, GBP, HKD, CHF, JPY, CNY, TRY)
- * @property {number} payment - сумма платежа, с учётом знака -200.42
- * @property {string?} figi - идентификатор инструмента FIGI
- * @property {string?} instrumentType - тип инструмента (Stock, Currency, Bond, Etf)
- * @property {number?} price - стоимость одного лота, например 100.21
- * @property {number?} quantity - количество лотов в заявке
- * @property {number?} quantityExecuted - количество исполненных лотов
- * @property {{currency: string, value: number}?} commission - комиссия, например {currency: "USD", value: -0.07}
- * @property {Array?} trades - массив биржевых сделок
- * Дополнительные свойства:
- * @property {string} account - идентификатор счёта
- */
+/** @typedef {import('../types').Operation} Operation */
 
 /** Название хранилища в базе данных */
 const storeName = "operations";

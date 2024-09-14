@@ -1,11 +1,15 @@
 // @ts-check
+import { loadOperationsByFigiAsync, loadPortfolioPositionsAsync } from "./data.js";
 import { calcPriceChange, calcPriceChangePercents, processFill } from "./calculate.js";
-import { Fill, sortFills } from "./fill.js";
-import { Position, updatePosition } from "./position.js";
+import { toNumber } from "./mapping.js";
+import { sortFills } from "./model/Fill.js";
+import { Position, updatePosition } from "./model/Position.js";
+import { saveCurrencyRates, savePortfolios, storage } from "./storage.js";
 import getFillsRepository, { FillsRepository } from "./storage/fillsRepository.js";
-import instrumentsRepository from "./storage/instrumentsRepository.js";
 import getOperationsRepository, { OperationsRepository } from "./storage/operationsRepository.js";
-import { EUR_FIGI, TTApi, USD_FIGI } from "./TTApi.js";
+import { TTApi2 } from "./TTApi2.js";
+import { buySellOperations, EUR_FIGI, RUB_FIGI, USD_FIGI } from "./utils.js";
+import { getInstrumentByFigiAsync } from "./instruments.js";
 
 /**
  * @typedef PortfolioFilter
@@ -45,13 +49,13 @@ export class Portfolio {
         this.title = title;
 
         /** @type {string?} идентификатор счёта */
-        this.account = undefined;
+        this.account = null;
 
         /** @type {Position[]} список позиций*/
         this.positions = [];
 
-        /** @type {PortfolioSettings} настройки портфеля */
-        this.settings = undefined;
+        /** @type {PortfolioSettings} настройки портфеля */ // @ts-ignore
+        this.settings = null;
 
         this.fillMissingFields();
     }
@@ -90,7 +94,7 @@ export class Portfolio {
      * Сохранить портфель
      */
     save() {
-        TTApi.savePortfolios();
+        savePortfolios();
     }
 
     // #region Positions
@@ -98,57 +102,61 @@ export class Portfolio {
     /**
      * Загрузить позиции, используя API
      */
-    async loadPositions() {
-        if (!!this.account) {
-            // Загружаем позиции
-            const positions = await TTApi.loadPortfolioAsync(this.account);
-            this.updatePortfolio(positions);
-            // Загружаем валютные позиции
-            const currencies = await TTApi.loadCurrenciesAsync(this.account);
-            this.updateCurrencies(currencies);
-            // Просчитываем позиции по сделкам
-            this.calculatePositions();
-
-            // Узнаём текущую цену нулевых позиций
-            // TODO: загружать стаканы только для избранных позиций, т.к. много запросов
-            this.positions
-                .filter(_ => _.count == 0)
-                .forEach(async position => {
-                    const orderbook = await TTApi.loadOrderbookAsync(position.figi);
-                    position.lastPrice = orderbook.lastPrice;
-                    position.lastPriceUpdated = new Date();
-                    window.dispatchEvent(new CustomEvent("PositionUpdated", { detail: { position } }));
-                });
+    async loadPositionsAsync() {
+        if (!this.account) {
+            throw new Error(`Portfolio ${this.id} has no account id. Can't fetch positions`);
         }
+        // Загружаем позиции
+        const items = await loadPortfolioPositionsAsync(this.account);
+        // Обновляем портфель
+        await this.updatePortfolioAsync(items);
+        // Просчитываем позиции по сделкам
+        this.calculatePositionsAsync();
 
-        return this.positions;
+        // TODO: Узнаём текущую цену нулевых позиций
+        // TODO: загружать стаканы только для избранных позиций, т.к. много запросов
+        // this.positions
+        //     .filter(_ => _.count == 0)
+        //     .forEach(async position => {
+        //         const orderbook = await TTApi.loadOrderbookAsync(position.figi);
+        //         position.lastPrice = orderbook.lastPrice;
+        //         position.lastPriceUpdated = new Date();
+        //         window.dispatchEvent(new CustomEvent("PositionUpdated", { detail: { position } }));
+        //     });
     }
 
     /**
      * Обновить позиции
-     * @param {import("./TTApi.js").PortfolioPosition[]} items - список позиций
+     * @param {import("./types.js").PortfolioPosition[]} items - список позиций
      */
-    updatePortfolio(items) {
+    async updatePortfolioAsync(items) {
+        const currencies = items.filter(item => item.instrumentType === 'currency');
+        const newPositions = items.filter(item => !this.positions.find(x => x.figi === item.figi))
+        const instruments = await Promise.all(
+            newPositions.concat(currencies).map(item => getInstrumentByFigiAsync(item.figi))
+        )
         const now = new Date();
         let created = 0;
         let updated = 0;
         items.forEach(item => {
-            const averagePrice = item.instrumentType == 'Bond' ? item.averagePositionPriceNoNkd?.value : item.averagePositionPrice?.value;
-            const lastPrice = item.expectedYield?.value / item.balance + averagePrice
+            const averagePrice = item.averagePositionPrice
+            const lastPrice = item.expectedYield / item.quantity + averagePrice
             // Находим существующую позицию в портфеле или создаём новую
             let position = this.positions.find(_ => _.figi === item.figi);
             if (!position) {
-                position = new Position(this.id, item);
+                const instrument = instruments.find(x => x.figi == item.figi)
+                position = new Position(this.id, item, instrument);
                 this.positions.push(position);
                 created++;
             }
             let changed = false;
-            if (position.count !== item.balance) {
-                position.count = item.balance;
+            if (position.count !== item.quantity) {
+                position.count = item.quantity;
                 position.needCalc = true;
                 changed = true;
             }
             position.lastPriceUpdated = now;
+            position.lastPriceTimestamp = null;
             if (position.lastPrice !== lastPrice) {
                 position.lastPrice = lastPrice;
                 changed = true;
@@ -157,11 +165,11 @@ export class Portfolio {
                 position.average = averagePrice;
                 changed = true;
             }
-            if (position.expected != item.expectedYield?.value) {
+            if (position.expected != item.expectedYield) {
                 position.calculatedExpected = (position.lastPrice - position.calculatedAverage) * position.calculatedCount;                changed = true;
-                position.expected = item.expectedYield?.value;
-                if (position.currency == 'RUB' && Math.abs(position.calculatedExpected - position.expected) > 100 ||
-                    position.currency != 'RUB' && Math.abs(position.calculatedExpected - position.expected) > 1) {
+                position.expected = item.expectedYield;
+                if (position.currency == 'rub' && Math.abs(position.calculatedExpected - position.expected) > 100 ||
+                    position.currency != 'rub' && Math.abs(position.calculatedExpected - position.expected) > 1) {
                     position.needCalc = true;
                 }
                 changed = true;
@@ -169,10 +177,17 @@ export class Portfolio {
             if (changed) {
                 updated++;
             }
+            // Обновляем курсы валют
+            if (position.instrumentType === "currency") {
+                const instrument = instruments.find(x => x.figi == item.figi)
+                if (instrument?.isoCurrencyName) {
+                    storage.currencyRates[instrument.isoCurrencyName.toUpperCase()] = position.lastPrice;
+                }
+            }
         });
         // Обнуляем позиции, которых больше нет среди новых позиций
         this.positions
-            .filter(position => position.count != 0 && position.ticker != "RUB" && !items.find(_ => _.figi == position.figi))
+            .filter(position => position.count != 0 && position.figi !== RUB_FIGI && !items.find(_ => _.figi == position.figi))
             .forEach(item => {
                 item.count = 0;
                 item.expected = undefined;
@@ -184,6 +199,9 @@ export class Portfolio {
         // Сортируем позиции
         this.sortPositions();
         this.save();
+
+        // Сохраняем курсы валют
+        saveCurrencyRates();
 
         console.log(`Positions created: ${created}, updated: ${updated}`)
     }
@@ -198,19 +216,19 @@ export class Portfolio {
 
     /**
      * Получить компаратор для сравнения двух позиций
-     * @returns {(a: Position, b: Position) => number}
+     * @returns {(a: Position?, b: Position?) => number}
      */
     getComparer() {
         /**
         * Сравнение с undefined
-        * @param {(a: Position, b: Position) => number} comparer
-        * @returns {(a: Position, b: Position) => number}
+        * @param {(a: Position?, b: Position?) => number} comparer
+        * @returns {(a: Position?, b: Position?) => number}
         */
         const withNull = (comparer) => {
             return (a, b) => {
-                if (a == undefined && b != undefined) { return 1; }
-                if (a != undefined && b == undefined) { return -1; }
-                if (a == undefined && b == undefined) { return 0; }
+                if (!a && b) { return 1; }
+                if (a && !b) { return -1; }
+                if (!a && !b) { return 0; }
                 return comparer(a, b);
             }
         };
@@ -244,10 +262,10 @@ export class Portfolio {
             return a.ticker.localeCompare(b.ticker);
         }
 
-        /** @type {(position: Position) => number} Селектор */
-        let fieldSelector = (_) => undefined;
+        /** @type {(position: Position) => number?} Селектор */
+        let fieldSelector = (_) => null;
 
-        const sort = this.settings.sorting.field ?? "default";
+        const sort = this.settings.sorting?.field ?? "default";
         switch (sort) {
             case "ticker":
                 return withAsc((a, b) => a.ticker.localeCompare(b.ticker));
@@ -261,13 +279,13 @@ export class Portfolio {
                 fieldSelector = (position) => position.lastPrice;
                 break;
             case "cost":
-                fieldSelector = (position) => position.lastPrice ? position.count * position.lastPrice : undefined;
+                fieldSelector = (position) => position.lastPrice ? position.count * position.lastPrice : null;
                 break;
             case "expected":
-                fieldSelector = (position) => position.expected ? position.expected : undefined;
+                fieldSelector = (position) => position.expected ? position.expected : null;
                 break;
             case "fixed":
-                fieldSelector = (position) => position.fixedPnL ? position.fixedPnL : undefined;
+                fieldSelector = (position) => position.fixedPnL ? position.fixedPnL : null;
                 break;
             case "change":
                 fieldSelector =
@@ -275,16 +293,16 @@ export class Portfolio {
                         ? (p) => {
                             if (p.previousDayPrice && p.lastPrice) {
                                 const change = calcPriceChangePercents(p.previousDayPrice, p.lastPrice);
-                                return change ? change : undefined;
+                                return change ? change : null;
                             }
-                            return undefined;
+                            return null;
                         }
                         : (p) => {
                             if (p.previousDayPrice && p.lastPrice) {
                                 const change = calcPriceChange(p.previousDayPrice, p.lastPrice);
-                                return Math.abs(change) < 0.01 ? undefined : change;
+                                return Math.abs(change ?? 0) < 0.01 ? null : change;
                             }
-                            return undefined;
+                            return null;
                         }
                 break;
             default:
@@ -296,9 +314,9 @@ export class Portfolio {
             const a = fieldSelector(p1);
             const b = fieldSelector(p2);
 
-            if (a == undefined && b != undefined) { return 1; }
-            if (a != undefined && b == undefined) { return -1; }
-            if (a == undefined && b == undefined) { return 0; }
+            if (!a && b) { return 1; }
+            if (a && !b) { return -1; }
+            if (!a || !b) { return 0; }
 
             return asc ? a - b : b - a;
         }
@@ -307,74 +325,13 @@ export class Portfolio {
     }
 
     /**
-     * Обновить валютные позиции
-     * @param {Array<import("./TTApi.js").CurrencyPosition>} items 
-     */
-    updateCurrencies(items) {
-        items.forEach(item => {
-            let name, figi, ticker, lastPrice, average;
-            switch (item.currency) {
-                case "USD":
-                    name = "Доллар США";
-                    figi = USD_FIGI;
-                    ticker = "USD000UTSTOM";
-                    break;
-                case "EUR":
-                    name = "Евро";
-                    figi = EUR_FIGI;
-                    ticker = "EUR_RUB__TOM";
-                    break;
-                case "RUB":
-                    name = "Рубли РФ";
-                    figi = item.currency;
-                    ticker = item.currency;
-                    lastPrice = 1;
-                    average = 1;
-                    break;
-                default:
-                    name = item.currency;
-                    figi = item.currency;
-                    ticker = item.currency;
-                    break;
-            }
-            let position = this.positions.find(_ => _.instrumentType == "Currency" && _.figi == figi);
-            if (!position) {
-                if (item.balance == 0) { return; }
-                position = new Position(this.id, {
-                    name,
-                    figi,
-                    ticker,
-                    isin: undefined,
-                    instrumentType: "Currency",
-                    balance: item.balance,
-                    lots: item.balance,
-                    blocked: undefined,
-                    expectedYield: undefined,
-                    averagePositionPrice: undefined,
-                    averagePositionPriceNoNkd: undefined,
-                });
-                position.currency = item.currency;
-                position.lastPrice = lastPrice;
-                position.average = average;
-                this.positions.push(position);
-            }
-            if (position.count !== item.balance) {
-                position.count = item.balance;
-            }
-            // Генерируем событие обновления позиции
-            window.dispatchEvent(new CustomEvent("PositionUpdated", { detail: { position } }));
-        });
-        this.save();
-    }
-
-    /**
      * Просчитать для позиций среднюю стоимость и зафиксированную прибыль
      */
-    async calculatePositions() {
+    async calculatePositionsAsync() {
         const now = new Date();
         // TODO: Ограничить значение 'from' если будут проблемы из-за слишком большого объёма данных
         // const lastYear = new Date(now.setFullYear(now.getFullYear() - 1));
-        const operations =  await TTApi.loadOperationsByFigiAsync(undefined, this.account, undefined);
+        const operations = await loadOperationsByFigiAsync(undefined, this.account, undefined);
         this.positions.forEach(async position => {
             const positionOperations = operations.filter(x => x.figi == position.figi);
             if (positionOperations.length > 0) {
@@ -388,24 +345,23 @@ export class Portfolio {
      * Поиск или создание позиции
      * @param {string} figi идентификатор
      */
-    async findPosition(figi) {
+    async findOrCreatePositionAsync(figi) {
         let position = this.positions.find(_ => _.figi == figi);
         if (!position) {
-            const item = await TTApi.findInstrumentByFigiAsync(figi);
+            const instrument = await getInstrumentByFigiAsync(figi);
             position = new Position(this.id, {
-                ticker: item.ticker,
-                name: item.name,
-                figi: item.figi,
-                isin: item.isin,
-                instrumentType: item.type,
-                balance: 0,
-                lots: 0,
-                blocked: undefined,
+                figi: instrument.figi,
+                instrumentType: instrument.type,
+                quantity: 0,
+                quantityLots: 0,
                 expectedYield: undefined,
                 averagePositionPrice: undefined,
-                averagePositionPriceNoNkd: undefined,
-            });
-            position.currency = item.currency;
+                averagePositionPriceFifo: undefined,
+                averagePositionPricePt: undefined,
+                currentNkd: undefined,
+                currentPrice: undefined,
+                currency: instrument.currency,
+            }, instrument);
         }
         return position;
     }
@@ -466,24 +422,12 @@ export class Portfolio {
 
     /**
      * Загрузить заявки
-     * @param {string} ticker - идентификатор
+     * @param {string} figi - идентификатор
      */
-    async loadOrdersByTicker(ticker) {
-        let figi = this.positions.find(_ => _.ticker == ticker)?.figi
-            || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
-
-        if (!figi) {
-            const item = await TTApi.loadInstrumentByTickerAsync(ticker);
-            if (!item) {
-                throw new Error("Instrument not found");
-            }
-            figi = item.figi;
-        }
-
-        const orders = await TTApi.loadOrdersByFigiAsync(figi, this.account);
+    async loadOrdersByFigi(figi) {
+        const orders = await TTApi2.fetchOrdersByFigiAsync(figi, this.account);
         return orders;
     }
-
 
     // #endregion
 
@@ -491,23 +435,12 @@ export class Portfolio {
 
     /**
      * Загрузить сделки
-     * @param {string} ticker - идентификатор
+     * @param {string} figi - идентификатор
      */
-    async loadFillsByTicker(ticker) {
-        let figi = this.positions.find(_ => _.ticker == ticker)?.figi
-            || (await instrumentsRepository.getOneByTicker(ticker))?.figi;
-
-        if (!figi) {
-            const item = await TTApi.loadInstrumentByTickerAsync(ticker);
-            if (!item) {
-                throw new Error("Instrument not found");
-            }
-            figi = item.figi;
-        }
-
-        const operations = await TTApi.loadOperationsByFigiAsync(figi, this.account);
+    async loadFillsByFigi(figi) {
+        const operations = await loadOperationsByFigiAsync(figi, this.account);
         await this.operationsRepository.putMany(operations);
-        const position = await this.findPosition(figi);
+        const position = await this.findOrCreatePositionAsync(figi);
         this.addPosition(position);
         this.sortPositions();
 
@@ -516,9 +449,10 @@ export class Portfolio {
 
     /**
      * Загрузить все операции
+     * @returns {Promise<import("./types.js").Operation[]>}
      */
-    async loadOperations() {
-        const operations = await TTApi.loadOperationsByFigiAsync(undefined, this.account);
+    async loadOperationsAsync() {
+        const operations = await loadOperationsByFigiAsync(undefined, this.account)
         this.operationsRepository.putMany(operations);
         return operations;
     }
@@ -526,8 +460,8 @@ export class Portfolio {
     /**
      * Обновить список сделок и просчитать позиции
      * @param {Position} position - позиция
-     * @param {Array<import("./TTApi.js").Operation>} operations - список операций
-     * @returns {Promise<Array<Fill>>}
+     * @param {import("./types.js").Operation[]} operations - список операций
+     * @returns {Promise<import("./types.js").Fill[]>}
      */
     async updateFills(position, operations) {
         let created = 0;
@@ -535,11 +469,11 @@ export class Portfolio {
         let fills = await this.fillsRepository.getAllByFigi(position.figi) || [];
 
         operations
-            .filter(_ => _.status == "Done" && ["Buy", "BuyCard", "Sell"].includes(_.operationType))
-            .forEach(item => {
-                let fill = fills.find(_ => _.id == item.id);
+            .filter(operation => operation.status == "OPERATION_STATE_EXECUTED" && buySellOperations.includes(operation.operationType))
+            .forEach(operation => {
+                let fill = fills.find(_ => _.id == operation.id);
                 if (!fill) {
-                    fill = new Fill(this.id, item);
+                    fill = { ...operation, portfolioId: this.id}
                     fills.push(fill);
                     created++;
                 }
@@ -547,24 +481,22 @@ export class Portfolio {
                 if (fill.manual) { return; }
 
                 let fillUpdated = false;
-                if (fill.price != item.price ||
-                    fill.commission != item.commission?.value) {
-                    fill.price = item.price;
-                    fill.commission = item.commission?.value;
+                if (fill.price != operation.price ) {
+                    fill.price = operation.price;
                     fillUpdated = true;
                 }
-                if (fill.quantity != item.quantity ||
-                    fill.quantityExecuted != item.quantityExecuted) {
-                    fill.quantity = item.quantity;
-                    fill.quantityExecuted = item.quantityExecuted;
+                if (fill.lotsRequested != operation.lotsRequested ||
+                    fill.lotsExecuted != operation.lotsExecuted) {
+                    fill.lotsRequested = operation.lotsRequested;
+                    fill.lotsExecuted = operation.lotsExecuted;
                     fillUpdated = true;
                 }
-                if (fill.trades?.length != item.trades?.length) {
-                    fill.trades = item.trades;
+                if (fill.trades?.length != operation.trades?.length) {
+                    fill.trades = operation.trades;
                     fillUpdated = true;
                 }
-                if (fill.payment != item.payment) {
-                    fill.payment = item.payment;
+                if (fill.payment != operation.payment) {
+                    fill.payment = operation.payment;
                     fillUpdated = true;
                 }
                 if (fillUpdated) {
